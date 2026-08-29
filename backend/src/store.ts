@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createAssetPreview, createBuildPlan, createBusiness, createDeployment, createOpportunities, createReport, createRuntime } from './demoData.js';
-import type { Business, Opportunity, ResearchRun, State } from './types.js';
+import { createBuildPlan, createDeployment, createJoeBusiness, createOpportunities, createReport, createRuntime } from './demoData.js';
+import { discoverBusinesses } from './discovery.js';
+import { interactWithRuntime } from './orchestrator.js';
+import { getResearchProvider } from './researchProviders.js';
+import type { Business, DiscoveryResponse, ResearchResponse, ResearchRun, RuntimeInteractionResponse, State } from './types.js';
 
 const statePath = path.resolve(process.cwd(), '..', 'data/state.json');
 
@@ -15,21 +18,61 @@ function ensureStateFile() {
 function readState(): State {
   ensureStateFile();
   const raw = fs.readFileSync(statePath, 'utf8');
-  return JSON.parse(raw) as State;
+  const parsed = JSON.parse(raw) as Partial<State>;
+  return {
+    businesses: Array.isArray(parsed.businesses) ? parsed.businesses : [],
+    researchRuns: Array.isArray(parsed.researchRuns) ? parsed.researchRuns : [],
+    deployments: Array.isArray(parsed.deployments) ? parsed.deployments : []
+  };
 }
 
 function writeState(state: State) {
   fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
 }
 
-function ensureBusiness(state: State): Business {
-  let business = state.businesses.find((entry) => entry.id === 'biz-joes-pizza');
-  if (!business) {
-    business = createBusiness();
-    state.businesses = [business];
-    writeState(state);
-  }
+function upsertBusiness(state: State, business: Business) {
+  const index = state.businesses.findIndex((entry) => entry.id === business.id);
+  if (index === -1) state.businesses.unshift(business);
+  else state.businesses[index] = business;
   return business;
+}
+
+function ensureSeedBusiness(state: State) {
+  const joe = state.businesses.find((entry) => entry.id === 'biz-joes-pizza');
+  if (joe) return joe;
+  const created = createJoeBusiness();
+  upsertBusiness(state, created);
+  writeState(state);
+  return created;
+}
+
+function getBusinessOrThrow(state: State, businessId: string) {
+  const business = state.businesses.find((entry) => entry.id === businessId);
+  if (!business) throw new Error('business not found');
+  return business;
+}
+
+function finalizeBusinessResearch(state: State, business: Business, providerName: string) {
+  const evidenceItems = business.evidenceItems ?? [];
+  const report = createReport(business, evidenceItems);
+  const opportunities = createOpportunities(business, evidenceItems);
+  const selected = opportunities[0];
+  const runtime = createRuntime(business, selected, report);
+
+  business.stage = 'researched';
+  business.report = report;
+  business.opportunities = opportunities;
+  business.selectedOpportunityId = selected.id;
+  business.buildPlan = createBuildPlan(selected, runtime.agents);
+  business.runtime = runtime;
+  business.deployment = createDeployment();
+  state.deployments = [business.deployment, ...state.deployments.filter((entry) => entry.id !== business.deployment?.id)].slice(0, 5);
+  upsertBusiness(state, business);
+
+  const run = state.researchRuns.find((entry) => entry.businessId === business.id && entry.status === 'running');
+  if (run) run.provider = providerName;
+
+  writeState(state);
 }
 
 function maybeFinalizeRun(state: State, run: ResearchRun) {
@@ -38,39 +81,27 @@ function maybeFinalizeRun(state: State, run: ResearchRun) {
   const total = run.stageDurationsMs.reduce((sum, ms) => sum + ms, 0);
   if (elapsed < total) return;
 
+  const business = getBusinessOrThrow(state, run.businessId);
+  finalizeBusinessResearch(state, business, run.provider);
+
   run.status = 'complete';
   run.completedAt = new Date().toISOString();
-
-  const business = ensureBusiness(state);
-  const report = createReport();
-  const opportunities = createOpportunities();
-  const selected = opportunities[0];
-  business.report = report;
-  business.opportunities = opportunities;
-  business.selectedOpportunityId = selected.id;
-  business.buildPlan = createBuildPlan(selected);
-  business.runtime = createRuntime(selected, report);
-  business.runtime.assetPreview = createAssetPreview(selected);
-  business.deployment = createDeployment();
-  state.deployments = [business.deployment];
   writeState(state);
 }
 
-export function getDiscovery(query: string) {
+export function getDiscovery(query: string): DiscoveryResponse {
   const state = readState();
-  const business = ensureBusiness(state);
-  if (!query.toLowerCase().includes('joe')) {
-    return {
-      matches: [],
-      suggestion: 'Demo mode currently includes Joe\'s Pizza. Search for Joe\'s Pizza to explore the full tier-1 flow.'
-    };
-  }
-  return { matches: [business], suggestion: null };
+  ensureSeedBusiness(state);
+  const response = discoverBusinesses(query);
+  response.matches.forEach((business) => upsertBusiness(state, business));
+  writeState(state);
+  return response;
 }
 
-export function startResearch(businessId: string) {
+export function startResearch(businessId: string): ResearchResponse | null {
   const state = readState();
-  ensureBusiness(state);
+  ensureSeedBusiness(state);
+  const business = getBusinessOrThrow(state, businessId);
 
   const existing = state.researchRuns.find((run) => run.businessId === businessId && run.status === 'running');
   if (existing) {
@@ -78,44 +109,58 @@ export function startResearch(businessId: string) {
     return getResearch(existing.id);
   }
 
+  const provider = getResearchProvider();
   const run: ResearchRun = {
     id: `run-${Date.now()}`,
     businessId,
     status: 'running',
     createdAt: new Date().toISOString(),
     startedAt: Date.now(),
-    stages: ['Discovering sources', 'Extracting evidence', 'Synthesizing report', 'Generating build plan', 'Preparing agent runtime'],
-    stageDurationsMs: [1500, 1700, 1600, 1500, 1700]
+    stages: ['Resolving business profile', 'Normalizing source findings', 'Synthesizing evidence model', 'Prioritizing opportunities', 'Preparing agent runtime'],
+    stageDurationsMs: [900, 1200, 1200, 900, 1200],
+    provider: provider.name
   };
+
   state.researchRuns.unshift(run);
   writeState(state);
+
+  provider.research(business).then((result) => {
+    const nextState = readState();
+    const nextBusiness = nextState.businesses.find((entry) => entry.id === businessId);
+    if (!nextBusiness) return;
+    nextBusiness.sources = result.sources;
+    nextBusiness.evidenceItems = result.evidenceItems;
+    upsertBusiness(nextState, nextBusiness);
+    writeState(nextState);
+  }).catch(() => undefined);
+
   return getResearch(run.id);
 }
 
-export function getResearch(runId: string) {
+export function getResearch(runId: string): ResearchResponse | null {
   const state = readState();
   const run = state.researchRuns.find((entry) => entry.id === runId);
   if (!run) return null;
   maybeFinalizeRun(state, run);
 
   const elapsed = Math.max(0, Date.now() - run.startedAt);
+  const total = run.stageDurationsMs.reduce((sum, ms) => sum + ms, 0);
+  let stageIndex = run.stages.length - 1;
   let acc = 0;
-  let stageIndex = 0;
   for (let i = 0; i < run.stageDurationsMs.length; i++) {
     acc += run.stageDurationsMs[i];
     if (elapsed < acc) {
       stageIndex = i;
       break;
     }
-    stageIndex = Math.min(i + 1, run.stages.length - 1);
   }
-  const total = run.stageDurationsMs.reduce((sum, ms) => sum + ms, 0);
-  const progress = Math.min(100, Math.round((elapsed / total) * 100));
-  const business = state.businesses.find((entry) => entry.id === run.businessId) ?? createBusiness();
+
+  const business = state.businesses.find((entry) => entry.id === run.businessId);
+  if (!business) return null;
 
   return {
     run,
-    progress,
+    progress: Math.min(100, Math.round((elapsed / total) * 100)),
     currentStage: run.status === 'complete' ? 'Complete' : run.stages[stageIndex],
     business
   };
@@ -123,31 +168,24 @@ export function getResearch(runId: string) {
 
 export function selectOpportunity(businessId: string, opportunityId: string) {
   const state = readState();
-  const business = ensureBusiness(state);
-  const report = business.report ?? createReport();
-  const opportunities = business.opportunities ?? createOpportunities();
-  const selected = opportunities.find((entry) => entry.id === opportunityId) ?? opportunities[0];
-
-  business.report = report;
-  business.opportunities = opportunities;
+  const business = getBusinessOrThrow(state, businessId);
+  if (!business.report || !business.opportunities) return business;
+  const selected = business.opportunities.find((entry) => entry.id === opportunityId) ?? business.opportunities[0];
   business.selectedOpportunityId = selected.id;
-  business.buildPlan = createBuildPlan(selected);
-  business.runtime = createRuntime(selected, report);
+  business.runtime = createRuntime(business, selected, business.report);
+  business.buildPlan = createBuildPlan(selected, business.runtime.agents);
   business.deployment = createDeployment();
-  state.deployments = [business.deployment];
+  upsertBusiness(state, business);
+  state.deployments = [business.deployment, ...state.deployments.filter((entry) => entry.id !== business.deployment?.id)].slice(0, 5);
   writeState(state);
   return business;
 }
 
 export function updateTask(businessId: string, taskId: string, action: 'advance' | 'block') {
   const state = readState();
-  const business = ensureBusiness(state);
-  if (!business.runtime) {
-    const selected = (business.opportunities ?? createOpportunities())[0];
-    business.runtime = createRuntime(selected, business.report ?? createReport());
-  }
-  const task = business.runtime.tasks.find((entry) => entry.id === taskId);
-  if (!task) return null;
+  const business = getBusinessOrThrow(state, businessId);
+  const task = business.runtime?.tasks.find((entry) => entry.id === taskId);
+  if (!task || !business.runtime) return null;
 
   if (action === 'advance') {
     task.status = task.status === 'queued' ? 'running' : 'done';
@@ -157,17 +195,34 @@ export function updateTask(businessId: string, taskId: string, action: 'advance'
     task.notes = 'Blocked manually from the live dashboard for operator review.';
   }
 
-  business.runtime.eventLog.unshift({ at: new Date().toISOString(), text: `${task.title} updated to ${task.status}.` });
-  if (business.deployment) {
-    const allDone = business.runtime.tasks.every((entry) => entry.status === 'done');
-    if (allDone) {
-      business.deployment.state = 'live';
-      business.deployment.history.push({ at: new Date().toISOString(), state: 'live', note: 'All agent tasks completed.' });
-      business.runtime.status = 'stable';
-    }
+  business.runtime.eventLog.unshift({
+    id: `evt-${Date.now()}`,
+    at: new Date().toISOString(),
+    type: 'task-update',
+    actor: 'operator',
+    text: `${task.title} updated to ${task.status}.`,
+    taskId: task.id
+  });
+
+  const allDone = business.runtime.tasks.every((entry) => entry.status === 'done');
+  if (business.deployment && allDone) {
+    business.deployment.state = 'live';
+    business.deployment.history.push({ at: new Date().toISOString(), state: 'live', note: 'All agent tasks completed.' });
+    business.runtime.status = 'stable';
   }
+
+  upsertBusiness(state, business);
   writeState(state);
   return business;
+}
+
+export function interact(businessId: string, agentId: string, message: string): RuntimeInteractionResponse {
+  const state = readState();
+  const business = getBusinessOrThrow(state, businessId);
+  const response = interactWithRuntime(business, agentId, message);
+  upsertBusiness(state, response.business);
+  writeState(state);
+  return response;
 }
 
 export function getBusiness(businessId: string) {

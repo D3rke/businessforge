@@ -1,10 +1,33 @@
+export type SourceKind = 'website' | 'review' | 'directory' | 'social' | 'search' | 'menu' | 'operations';
+
+export type EvidenceStrength = 'low' | 'medium' | 'high';
+export type EvidenceSentiment = 'positive' | 'negative' | 'mixed' | 'neutral';
+export type FindingType = 'demand' | 'friction' | 'offer' | 'operations' | 'proof' | 'audience';
+
 export type Source = {
   id: string;
   title: string;
   url: string;
-  kind: 'website' | 'review' | 'directory' | 'social';
+  kind: SourceKind;
   excerpt: string;
   evidence: string[];
+};
+
+export type EvidenceItem = {
+  id: string;
+  theme: string;
+  statement: string;
+  type: FindingType;
+  sentiment: EvidenceSentiment;
+  strength: EvidenceStrength;
+  sourceIds: string[];
+  implication: string;
+};
+
+export type EvidenceClaim = {
+  claim: string;
+  sourceIds: string[];
+  evidenceIds: string[];
 };
 
 export type IntelligenceReport = {
@@ -12,7 +35,8 @@ export type IntelligenceReport = {
   strengths: string[];
   gaps: string[];
   marketSignals: string[];
-  evidence: { claim: string; sourceIds: string[] }[];
+  evidence: EvidenceClaim[];
+  keyThemes: string[];
 };
 
 export type Opportunity = {
@@ -22,6 +46,9 @@ export type Opportunity = {
   confidence: number;
   effort: 'low' | 'medium' | 'high';
   rationale: string;
+  evidenceIds: string[];
+  capabilityNeeds: string[];
+  category: 'acquisition' | 'conversion' | 'retention' | 'operations';
 };
 
 export type BuildPlanStep = {
@@ -30,6 +57,7 @@ export type BuildPlanStep = {
   owner: string;
   outcome: string;
   status: 'todo' | 'ready' | 'doing' | 'done';
+  evidenceIds: string[];
 };
 
 export type AgentDefinition = {
@@ -41,6 +69,7 @@ export type AgentDefinition = {
   outputs: string[];
   tools: string[];
   dependsOn: string[];
+  capability: string;
 };
 
 export type AgentTask = {
@@ -49,6 +78,7 @@ export type AgentTask = {
   agentId: string;
   status: 'queued' | 'running' | 'blocked' | 'done';
   notes: string;
+  evidenceIds: string[];
 };
 
 export type AgentTest = {
@@ -72,28 +102,59 @@ export type AssetPreview = {
   bullets: string[];
 };
 
+export type RuntimeEventType = 'task-update' | 'handoff' | 'interaction' | 'capability-request' | 'system';
+
+export type RuntimeEvent = {
+  id: string;
+  at: string;
+  type: RuntimeEventType;
+  actor: string;
+  text: string;
+  taskId?: string;
+  capability?: string;
+};
+
+export type RuntimeInteraction = {
+  id: string;
+  at: string;
+  agentId: string;
+  userMessage: string;
+  response: string;
+};
+
 export type Runtime = {
   status: 'idle' | 'ready' | 'executing' | 'stable';
   agents: AgentDefinition[];
   tasks: AgentTask[];
   tests: AgentTest[];
   assetPreview: AssetPreview;
-  eventLog: { at: string; text: string }[];
+  eventLog: RuntimeEvent[];
+  interactions: RuntimeInteraction[];
+  missingCapabilities: string[];
 };
 
 export type Business = {
   id: string;
+  query: string;
   name: string;
   category: string;
   city: string;
   description: string;
+  stage: 'candidate' | 'researched';
+  discoveryScore: number;
   sources: Source[];
+  evidenceItems?: EvidenceItem[];
   report?: IntelligenceReport;
   opportunities?: Opportunity[];
   selectedOpportunityId?: string;
   buildPlan?: BuildPlanStep[];
   runtime?: Runtime;
   deployment?: Deployment;
+};
+
+export type DiscoveryResponse = {
+  matches: Business[];
+  suggestion: string | null;
 };
 
 export type ResearchRun = {
@@ -104,6 +165,7 @@ export type ResearchRun = {
   startedAt: number;
   stageDurationsMs: number[];
   stages: string[];
+  provider: string;
   completedAt?: string;
 };
 
@@ -111,4 +173,16 @@ export type State = {
   businesses: Business[];
   researchRuns: ResearchRun[];
   deployments: Deployment[];
+};
+
+export type ResearchResponse = {
+  run: ResearchRun;
+  progress: number;
+  currentStage: string;
+  business: Business;
+};
+
+export type RuntimeInteractionResponse = {
+  business: Business;
+  interaction: RuntimeInteraction;
 };

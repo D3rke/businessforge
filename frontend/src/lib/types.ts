@@ -7,12 +7,24 @@ export type Source = {
   evidence: string[];
 };
 
+export type EvidenceItem = {
+  id: string;
+  theme: string;
+  statement: string;
+  type: string;
+  sentiment: string;
+  strength: string;
+  sourceIds: string[];
+  implication: string;
+};
+
 export type IntelligenceReport = {
   summary: string;
   strengths: string[];
   gaps: string[];
   marketSignals: string[];
-  evidence: { claim: string; sourceIds: string[] }[];
+  evidence: { claim: string; sourceIds: string[]; evidenceIds: string[] }[];
+  keyThemes: string[];
 };
 
 export type Opportunity = {
@@ -22,6 +34,9 @@ export type Opportunity = {
   confidence: number;
   effort: string;
   rationale: string;
+  evidenceIds: string[];
+  capabilityNeeds: string[];
+  category: string;
 };
 
 export type BuildPlanStep = {
@@ -30,6 +45,7 @@ export type BuildPlanStep = {
   owner: string;
   outcome: string;
   status: string;
+  evidenceIds: string[];
 };
 
 export type AgentDefinition = {
@@ -41,6 +57,7 @@ export type AgentDefinition = {
   outputs: string[];
   tools: string[];
   dependsOn: string[];
+  capability: string;
 };
 
 export type AgentTask = {
@@ -49,6 +66,7 @@ export type AgentTask = {
   agentId: string;
   status: string;
   notes: string;
+  evidenceIds: string[];
 };
 
 export type AgentTest = {
@@ -72,22 +90,46 @@ export type AssetPreview = {
   bullets: string[];
 };
 
+export type RuntimeEvent = {
+  id: string;
+  at: string;
+  type: string;
+  actor: string;
+  text: string;
+  taskId?: string;
+  capability?: string;
+};
+
+export type RuntimeInteraction = {
+  id: string;
+  at: string;
+  agentId: string;
+  userMessage: string;
+  response: string;
+};
+
 export type Runtime = {
   status: string;
   agents: AgentDefinition[];
   tasks: AgentTask[];
   tests: AgentTest[];
   assetPreview: AssetPreview;
-  eventLog: { at: string; text: string }[];
+  eventLog: RuntimeEvent[];
+  interactions: RuntimeInteraction[];
+  missingCapabilities: string[];
 };
 
 export type Business = {
   id: string;
+  query: string;
   name: string;
   category: string;
   city: string;
   description: string;
+  stage: string;
+  discoveryScore: number;
   sources: Source[];
+  evidenceItems?: EvidenceItem[];
   report?: IntelligenceReport;
   opportunities?: Opportunity[];
   selectedOpportunityId?: string;
@@ -96,9 +138,19 @@ export type Business = {
   deployment?: Deployment;
 };
 
+export type DiscoveryResponse = {
+  matches: Business[];
+  suggestion: string | null;
+};
+
 export type ResearchResponse = {
-  run: { id: string; status: string };
+  run: { id: string; status: string; provider: string };
   progress: number;
   currentStage: string;
   business: Business;
+};
+
+export type RuntimeInteractionResponse = {
+  business: Business;
+  interaction: RuntimeInteraction;
 };
