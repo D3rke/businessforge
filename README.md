@@ -1,12 +1,13 @@
 # BusinessForge
 
-BusinessForge is a full-stack MVP for turning business discovery into an evidence-backed operating plan and lightweight agent runtime.
+BusinessForge is a full-stack MVP for turning business discovery into an evidence-backed operating plan and live agent workspace.
 
 ## Stack
 
-- Frontend: React, Vite, TypeScript, Tailwind CSS
+- Frontend: React, React Router, Vite, TypeScript, Tailwind CSS
 - Backend: Node.js, Express, TypeScript
-- Persistence: local JSON state for demo mode
+- Persistence: local JSON state
+- Discovery: public OpenStreetMap-based place search plus optional website research
 
 ## Run locally
 
@@ -21,47 +22,26 @@ The backend runs on <http://localhost:8788/>.
 
 ## Current flow
 
-BusinessForge now supports arbitrary local-business intake, with Joe's Pizza kept as demo fallback only.
+- landing page for search, website input, and Near me geolocation
+- results page with live business candidates from public place providers when available
+- workspace page with tabs for Overview, Sources, Opportunities, Agents, and Activity
+- website research still runs through the backend provider abstraction
+- if a public website is reachable, BusinessForge fetches accessible pages and derives evidence from them
+- if place or website data is thin, BusinessForge degrades gracefully to synthesized candidate data
+- Joe's Pizza remains only as a silent fallback path
 
-- discovery returns multiple candidate businesses per query
-- users can optionally provide a website URL during intake
-- if a public website is reachable, local research fetches accessible pages from that domain and turns them into real sources/evidence
-- if website fetch is unavailable or too thin, BusinessForge falls back to synthesized local-business signals
-- research still goes through the provider abstraction
-- an external HTTP provider can still replace the local research path later
-- evidence is normalized into structured findings
-- report, opportunities, build plan, and runtime all derive from that evidence
-- live operator messages can be routed to the runtime via `/api/business/:businessId/runtime/interact`
-
-## Optional external research provider
-
-If you want to wire in a real provider later, set:
-
-```bash
-RESEARCH_PROVIDER_URL=https://your-provider.example/research
-```
-
-BusinessForge will POST the selected business payload there and expect JSON containing `sources` and `evidenceItems`.
-
-## Try the real-path flow
+## Try a real search
 
 1. Start the app with `npm run dev`
-2. Search for a real business or category query
-3. Add a public website URL when you have one
-4. Run analysis
-
-You should see the workspace mark the business basis as `website`, `synthetic`, or `demo`.
-
-## Scripts
-
-```bash
-npm run dev
-npm run build
-npm run typecheck
-```
+2. Open the landing page
+3. Enter `McDonald's`
+4. Click `Near me` or add a city like `Los Angeles`
+5. Pick a result, then run analysis
+6. In the workspace, select an opportunity to shift into the focused agent view
 
 ## Notes
 
-- No API keys are required for the included local fallback mode.
-- Runtime state is written to `data/state.json`, which is intentionally gitignored.
-- External side effects like real CRM sends or production automations are still simulated, but internal handoffs, event emission, task updates, and runtime interaction are now live in-app.
+- No API keys are required for the included discovery path.
+- Public provider quality depends on OpenStreetMap and reachable websites.
+- Runtime state is written to `data/state.json`.
+- External side effects are still simulated, but internal handoffs, task updates, and runtime interaction are live in-app.

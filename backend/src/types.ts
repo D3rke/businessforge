@@ -133,6 +133,11 @@ export type Runtime = {
   missingCapabilities: string[];
 };
 
+export type GeoPoint = {
+  latitude: number;
+  longitude: number;
+};
+
 export type Business = {
   id: string;
   query: string;
@@ -140,8 +145,12 @@ export type Business = {
   category: string;
   city: string;
   description: string;
+  address?: string;
   websiteUrl?: string;
-  researchBasis?: 'demo' | 'synthetic' | 'website';
+  latitude?: number;
+  longitude?: number;
+  discoveryProvider?: string;
+  researchBasis?: 'demo' | 'synthetic' | 'website' | 'provider';
   stage: 'candidate' | 'researched';
   discoveryScore: number;
   sources: Source[];
@@ -162,6 +171,8 @@ export type DiscoveryResponse = {
 export type DiscoveryInput = {
   query: string;
   websiteUrl?: string;
+  locationText?: string;
+  coordinates?: GeoPoint;
 };
 
 export type ResearchRun = {

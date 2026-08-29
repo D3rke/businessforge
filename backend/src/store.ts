@@ -89,10 +89,10 @@ function maybeFinalizeRun(state: State, run: ResearchRun) {
   writeState(state);
 }
 
-export function getDiscovery(input: string | DiscoveryInput): DiscoveryResponse {
+export async function getDiscovery(input: string | DiscoveryInput): Promise<DiscoveryResponse> {
   const state = readState();
   ensureSeedBusiness(state);
-  const response = discoverBusinesses(input);
+  const response = await discoverBusinesses(input);
   response.matches.forEach((business) => upsertBusiness(state, business));
   writeState(state);
   return response;

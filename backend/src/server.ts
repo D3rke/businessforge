@@ -10,15 +10,33 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/discover', (req, res) => {
+app.get('/api/discover', async (req, res) => {
   const query = String(req.query.q ?? '');
   const websiteUrl = typeof req.query.websiteUrl === 'string' ? req.query.websiteUrl : undefined;
-  res.json(getDiscovery({ query, websiteUrl }));
+  const locationText = typeof req.query.locationText === 'string' ? req.query.locationText : undefined;
+  const latitudeValue = typeof req.query.latitude === 'string' ? Number(req.query.latitude) : Number.NaN;
+  const longitudeValue = typeof req.query.longitude === 'string' ? Number(req.query.longitude) : Number.NaN;
+  const coordinates = Number.isFinite(latitudeValue) && Number.isFinite(longitudeValue)
+    ? { latitude: latitudeValue, longitude: longitudeValue }
+    : undefined;
+  res.json(await getDiscovery({ query, websiteUrl, locationText, coordinates }));
 });
 
-app.post('/api/discover', (req, res) => {
-  const { query, websiteUrl } = req.body as { query?: string; websiteUrl?: string };
-  res.json(getDiscovery({ query: String(query ?? ''), websiteUrl }));
+app.post('/api/discover', async (req, res) => {
+  const { query, websiteUrl, locationText, coordinates } = req.body as {
+    query?: string;
+    websiteUrl?: string;
+    locationText?: string;
+    coordinates?: { latitude?: number; longitude?: number };
+  };
+  res.json(await getDiscovery({
+    query: String(query ?? ''),
+    websiteUrl,
+    locationText,
+    coordinates: coordinates && Number.isFinite(coordinates.latitude) && Number.isFinite(coordinates.longitude)
+      ? { latitude: Number(coordinates.latitude), longitude: Number(coordinates.longitude) }
+      : undefined
+  }));
 });
 
 app.post('/api/research/start', async (req, res) => {
