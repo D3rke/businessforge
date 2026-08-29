@@ -1,5 +1,23 @@
 import { createFallbackBusiness, createJoeBusiness } from './demoData.js';
-import type { Business, DiscoveryResponse } from './types.js';
+import type { Business, DiscoveryInput, DiscoveryResponse } from './types.js';
+
+function normalizeWebsiteUrl(input?: string) {
+  if (!input?.trim()) return null;
+  try {
+    return new URL(input.startsWith('http') ? input : `https://${input}`).toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractUrlFromText(query: string) {
+  const match = query.match(/https?:\/\/[^\s]+|(?:www\.)[^\s]+\.[^\s]+/i);
+  return normalizeWebsiteUrl(match?.[0]);
+}
+
+function cleanQuery(query: string) {
+  return query.replace(/https?:\/\/[^\s]+/gi, '').replace(/(?:www\.)[^\s]+\.[^\s]+/gi, '').trim();
+}
 
 function scoreQuery(query: string, candidate: Business) {
   const q = query.toLowerCase();
@@ -10,12 +28,14 @@ function scoreQuery(query: string, candidate: Business) {
   return Math.min(99, score);
 }
 
-export function discoverBusinesses(query: string): DiscoveryResponse {
-  const trimmed = query.trim();
+export function discoverBusinesses(input: string | DiscoveryInput): DiscoveryResponse {
+  const rawQuery = typeof input === 'string' ? input : input.query;
+  const websiteUrl = normalizeWebsiteUrl(typeof input === 'string' ? undefined : input.websiteUrl) ?? extractUrlFromText(rawQuery);
+  const trimmed = cleanQuery(rawQuery).trim() || (websiteUrl ? new URL(websiteUrl).hostname.replace(/^www\./, '') : '');
   if (!trimmed) {
     return {
       matches: [createJoeBusiness(), createFallbackBusiness('North Star Dental in Seattle', 0), createFallbackBusiness('Glowbar salon in Austin', 0)],
-      suggestion: 'Try a business name, category, or local query like “dentist in Seattle” or “pizza near Austin”.'
+      suggestion: 'Try a real business name, a category query, or add a website like “North Star Dental in Seattle” plus “northstardental.com”. Joe\'s Pizza is available as demo data only.'
     };
   }
 
@@ -23,7 +43,7 @@ export function discoverBusinesses(query: string): DiscoveryResponse {
   const joe = createJoeBusiness();
   if (trimmed.toLowerCase().includes('joe') || trimmed.toLowerCase().includes('pizza')) candidates.push(joe);
 
-  const fallbackVariants = [0, 1, 2].map((variant) => createFallbackBusiness(trimmed, variant));
+  const fallbackVariants = [0, 1, 2].map((variant) => createFallbackBusiness(trimmed, variant, websiteUrl ?? undefined));
   candidates.push(...fallbackVariants);
 
   const deduped = Array.from(new Map(candidates.map((candidate) => [candidate.id, candidate])).values())
@@ -33,6 +53,10 @@ export function discoverBusinesses(query: string): DiscoveryResponse {
 
   return {
     matches: deduped,
-    suggestion: deduped[0]?.id === joe.id ? 'Joe\'s Pizza remains available as the richest demo dataset, but arbitrary businesses now synthesize into the same flow.' : 'No live provider is configured, so BusinessForge synthesized the best candidate profiles from your query.'
+    suggestion: websiteUrl
+      ? 'BusinessForge will try real public-page research from the provided website, then fall back only if the site is inaccessible or too thin.'
+      : deduped[0]?.id === joe.id
+        ? 'Joe\'s Pizza is still the richest demo profile, but it is not the main path. Add a real business name or website to drive non-demo research.'
+        : 'No external provider is configured, so discovery is still synthesized. Add a website URL to ground research in accessible public pages.'
   };
 }

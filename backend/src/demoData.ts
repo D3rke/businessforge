@@ -60,6 +60,7 @@ export function createJoeBusiness(): Business {
     category: 'restaurant',
     city: 'Brooklyn, NY',
     description: 'Neighborhood pizza shop with strong product love, steady walk-in demand, and underdeveloped digital conversion.',
+    researchBasis: 'demo',
     stage: 'candidate',
     discoveryScore: 98,
     sources: joeSources
@@ -99,19 +100,19 @@ function categoryDescription(category: string) {
   return descriptions[category] ?? descriptions['local-service'];
 }
 
-function buildGenericSources(name: string, category: string, city: string): Source[] {
+function buildGenericSources(name: string, category: string, city: string, websiteUrl?: string): Source[] {
   const base = sanitizeQuery(name);
   const categoryLabel = category.replace(/-/g, ' ');
   return [
     {
       id: `src-${base}-site`,
-      title: `${name} website snapshot`,
-      url: `https://demo.local/${base}`,
+      title: websiteUrl ? `${name} provided website` : `${name} website snapshot`,
+      url: websiteUrl ?? `https://demo.local/${base}`,
       kind: 'website',
-      excerpt: `${titleCase(categoryLabel)} website for ${name} in ${city}.`,
+      excerpt: websiteUrl ? `Provided website for ${name}. BusinessForge will try to fetch accessible public pages from this domain.` : `${titleCase(categoryLabel)} website for ${name} in ${city}.`,
       evidence: [
-        'Primary call-to-action exists but supporting proof is limited above the fold',
-        'Core offer is visible, but urgency and conversion path are not tightly packaged'
+        websiteUrl ? 'Public website provided for live research' : 'Primary call-to-action exists but supporting proof is limited above the fold',
+        websiteUrl ? 'If the site is reachable, BusinessForge can ground evidence in real page content' : 'Core offer is visible, but urgency and conversion path are not tightly packaged'
       ]
     },
     {
@@ -150,7 +151,7 @@ function buildGenericSources(name: string, category: string, city: string): Sour
   ];
 }
 
-export function createFallbackBusiness(query: string, variant = 0): Business {
+export function createFallbackBusiness(query: string, variant = 0, websiteUrl?: string): Business {
   const category = inferCategory(query);
   const city = inferCity(query);
   const normalized = query.trim() || 'Local Business';
@@ -170,9 +171,11 @@ export function createFallbackBusiness(query: string, variant = 0): Business {
     category,
     city,
     description: categoryDescription(category),
+    websiteUrl,
+    researchBasis: websiteUrl ? 'website' : 'synthetic',
     stage: 'candidate',
     discoveryScore: Math.max(63, 92 - variant * 11),
-    sources: buildGenericSources(name, category, city)
+    sources: buildGenericSources(name, category, city, websiteUrl)
   };
 }
 

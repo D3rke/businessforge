@@ -140,6 +140,8 @@ export type Business = {
   category: string;
   city: string;
   description: string;
+  websiteUrl?: string;
+  researchBasis?: 'demo' | 'synthetic' | 'website';
   stage: 'candidate' | 'researched';
   discoveryScore: number;
   sources: Source[];
@@ -155,6 +157,11 @@ export type Business = {
 export type DiscoveryResponse = {
   matches: Business[];
   suggestion: string | null;
+};
+
+export type DiscoveryInput = {
+  query: string;
+  websiteUrl?: string;
 };
 
 export type ResearchRun = {

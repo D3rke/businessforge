@@ -12,13 +12,19 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/discover', (req, res) => {
   const query = String(req.query.q ?? '');
-  res.json(getDiscovery(query));
+  const websiteUrl = typeof req.query.websiteUrl === 'string' ? req.query.websiteUrl : undefined;
+  res.json(getDiscovery({ query, websiteUrl }));
 });
 
-app.post('/api/research/start', (req, res) => {
+app.post('/api/discover', (req, res) => {
+  const { query, websiteUrl } = req.body as { query?: string; websiteUrl?: string };
+  res.json(getDiscovery({ query: String(query ?? ''), websiteUrl }));
+});
+
+app.post('/api/research/start', async (req, res) => {
   const { businessId } = req.body as { businessId?: string };
   if (!businessId) return res.status(400).json({ error: 'businessId required' });
-  const result = startResearch(businessId);
+  const result = await startResearch(businessId);
   if (!result) return res.status(404).json({ error: 'business not found' });
   res.json(result);
 });

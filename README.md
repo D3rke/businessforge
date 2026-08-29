@@ -21,13 +21,14 @@ The backend runs on <http://localhost:8788/>.
 
 ## Current flow
 
-BusinessForge now supports arbitrary local-business queries, not just Joe's Pizza.
+BusinessForge now supports arbitrary local-business intake, with Joe's Pizza kept as demo fallback only.
 
 - discovery returns multiple candidate businesses per query
-- Joe's Pizza remains the richest built-in demo profile
-- other queries synthesize fallback candidates from the search text
-- research goes through a provider abstraction
-- without external config, the app uses a local fallback provider
+- users can optionally provide a website URL during intake
+- if a public website is reachable, local research fetches accessible pages from that domain and turns them into real sources/evidence
+- if website fetch is unavailable or too thin, BusinessForge falls back to synthesized local-business signals
+- research still goes through the provider abstraction
+- an external HTTP provider can still replace the local research path later
 - evidence is normalized into structured findings
 - report, opportunities, build plan, and runtime all derive from that evidence
 - live operator messages can be routed to the runtime via `/api/business/:businessId/runtime/interact`
@@ -41,6 +42,15 @@ RESEARCH_PROVIDER_URL=https://your-provider.example/research
 ```
 
 BusinessForge will POST the selected business payload there and expect JSON containing `sources` and `evidenceItems`.
+
+## Try the real-path flow
+
+1. Start the app with `npm run dev`
+2. Search for a real business or category query
+3. Add a public website URL when you have one
+4. Run analysis
+
+You should see the workspace mark the business basis as `website`, `synthetic`, or `demo`.
 
 ## Scripts
 

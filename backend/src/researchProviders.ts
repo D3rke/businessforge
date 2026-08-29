@@ -1,5 +1,6 @@
 import { createEvidenceItems } from './demoData.js';
 import type { Business, EvidenceItem, Source } from './types.js';
+import { researchWebsite } from './websiteResearch.js';
 
 export type ResearchProviderResult = {
   provider: string;
@@ -19,6 +20,11 @@ class LocalResearchProvider implements ResearchProvider {
     return true;
   }
   async research(business: Business): Promise<ResearchProviderResult> {
+    const websiteResult = await researchWebsite(business);
+    if (websiteResult) {
+      return websiteResult;
+    }
+
     return {
       provider: this.name,
       sources: business.sources,

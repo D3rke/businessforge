@@ -1,4 +1,4 @@
-import type { Business, DiscoveryResponse, ResearchResponse, RuntimeInteractionResponse } from './types';
+import type { Business, DiscoveryInput, DiscoveryResponse, ResearchResponse, RuntimeInteractionResponse } from './types';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -10,7 +10,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  discover: (q: string) => request<DiscoveryResponse>(`/api/discover?q=${encodeURIComponent(q)}`),
+  discover: (input: DiscoveryInput) => request<DiscoveryResponse>('/api/discover', { method: 'POST', body: JSON.stringify(input) }),
   startResearch: (businessId: string) => request<ResearchResponse>('/api/research/start', { method: 'POST', body: JSON.stringify({ businessId }) }),
   getResearch: (runId: string) => request<ResearchResponse>(`/api/research/${runId}`),
   selectOpportunity: (businessId: string, opportunityId: string) => request<Business>(`/api/business/${businessId}/select-opportunity`, { method: 'POST', body: JSON.stringify({ opportunityId }) }),

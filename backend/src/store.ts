@@ -4,7 +4,7 @@ import { createBuildPlan, createDeployment, createJoeBusiness, createOpportuniti
 import { discoverBusinesses } from './discovery.js';
 import { interactWithRuntime } from './orchestrator.js';
 import { getResearchProvider } from './researchProviders.js';
-import type { Business, DiscoveryResponse, ResearchResponse, ResearchRun, RuntimeInteractionResponse, State } from './types.js';
+import type { Business, DiscoveryInput, DiscoveryResponse, ResearchResponse, ResearchRun, RuntimeInteractionResponse, State } from './types.js';
 
 const statePath = path.resolve(process.cwd(), '..', 'data/state.json');
 
@@ -89,16 +89,16 @@ function maybeFinalizeRun(state: State, run: ResearchRun) {
   writeState(state);
 }
 
-export function getDiscovery(query: string): DiscoveryResponse {
+export function getDiscovery(input: string | DiscoveryInput): DiscoveryResponse {
   const state = readState();
   ensureSeedBusiness(state);
-  const response = discoverBusinesses(query);
+  const response = discoverBusinesses(input);
   response.matches.forEach((business) => upsertBusiness(state, business));
   writeState(state);
   return response;
 }
 
-export function startResearch(businessId: string): ResearchResponse | null {
+export async function startResearch(businessId: string): Promise<ResearchResponse | null> {
   const state = readState();
   ensureSeedBusiness(state);
   const business = getBusinessOrThrow(state, businessId);
@@ -124,15 +124,23 @@ export function startResearch(businessId: string): ResearchResponse | null {
   state.researchRuns.unshift(run);
   writeState(state);
 
-  provider.research(business).then((result) => {
+  try {
+    const result = await provider.research(business);
     const nextState = readState();
     const nextBusiness = nextState.businesses.find((entry) => entry.id === businessId);
-    if (!nextBusiness) return;
-    nextBusiness.sources = result.sources;
-    nextBusiness.evidenceItems = result.evidenceItems;
-    upsertBusiness(nextState, nextBusiness);
-    writeState(nextState);
-  }).catch(() => undefined);
+    if (nextBusiness) {
+      nextBusiness.sources = result.sources;
+      nextBusiness.evidenceItems = result.evidenceItems;
+      nextBusiness.researchBasis = result.provider === 'local-web-research' ? 'website' : nextBusiness.researchBasis ?? 'synthetic';
+      upsertBusiness(nextState, nextBusiness);
+
+      const nextRun = nextState.researchRuns.find((entry) => entry.id === run.id);
+      if (nextRun) nextRun.provider = result.provider;
+      writeState(nextState);
+    }
+  } catch {
+    // Preserve fallback-friendly behavior. The run will complete from whatever candidate data is available.
+  }
 
   return getResearch(run.id);
 }
