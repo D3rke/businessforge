@@ -1,10 +1,15 @@
-import express from 'express';
 import cors from 'cors';
+import express from 'express';
 import { getBusiness, getDiscovery, getResearch, interact, selectOpportunity, startResearch, updateTask } from './store.js';
+import type { ResearchMode } from './types.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+function parseMode(input: unknown): ResearchMode | undefined {
+  return input === 'BUSINESS' || input === 'CORPORATION' ? input : undefined;
+}
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
@@ -14,28 +19,21 @@ app.get('/api/discover', async (req, res) => {
   const query = String(req.query.q ?? '');
   const websiteUrl = typeof req.query.websiteUrl === 'string' ? req.query.websiteUrl : undefined;
   const locationText = typeof req.query.locationText === 'string' ? req.query.locationText : undefined;
+  const mode = parseMode(req.query.mode);
   const latitudeValue = typeof req.query.latitude === 'string' ? Number(req.query.latitude) : Number.NaN;
   const longitudeValue = typeof req.query.longitude === 'string' ? Number(req.query.longitude) : Number.NaN;
-  const coordinates = Number.isFinite(latitudeValue) && Number.isFinite(longitudeValue)
-    ? { latitude: latitudeValue, longitude: longitudeValue }
-    : undefined;
-  res.json(await getDiscovery({ query, websiteUrl, locationText, coordinates }));
+  const coordinates = Number.isFinite(latitudeValue) && Number.isFinite(longitudeValue) ? { latitude: latitudeValue, longitude: longitudeValue } : undefined;
+  res.json(await getDiscovery({ query, websiteUrl, locationText, coordinates, mode }));
 });
 
 app.post('/api/discover', async (req, res) => {
-  const { query, websiteUrl, locationText, coordinates } = req.body as {
-    query?: string;
-    websiteUrl?: string;
-    locationText?: string;
-    coordinates?: { latitude?: number; longitude?: number };
-  };
+  const { query, websiteUrl, locationText, coordinates, mode } = req.body as { query?: string; websiteUrl?: string; locationText?: string; coordinates?: { latitude?: number; longitude?: number }; mode?: ResearchMode };
   res.json(await getDiscovery({
     query: String(query ?? ''),
     websiteUrl,
     locationText,
-    coordinates: coordinates && Number.isFinite(coordinates.latitude) && Number.isFinite(coordinates.longitude)
-      ? { latitude: Number(coordinates.latitude), longitude: Number(coordinates.longitude) }
-      : undefined
+    mode: parseMode(mode) ?? 'BUSINESS',
+    coordinates: coordinates && Number.isFinite(coordinates.latitude) && Number.isFinite(coordinates.longitude) ? { latitude: Number(coordinates.latitude), longitude: Number(coordinates.longitude) } : undefined
   }));
 });
 

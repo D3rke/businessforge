@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { executeBuildRun } from './buildRuntime.js';
 import { createBuildPlan, createDeployment, createJoeBusiness, createOpportunities, createReport, createRuntime } from './demoData.js';
 import { discoverBusinesses } from './discovery.js';
 import { interactWithRuntime } from './orchestrator.js';
 import { getResearchProvider } from './researchProviders.js';
 import type { Business, DiscoveryInput, DiscoveryResponse, ResearchResponse, ResearchRun, RuntimeInteractionResponse, State } from './types.js';
 
-const statePath = path.resolve(process.cwd(), '..', 'data/state.json');
+const repoRoot = path.resolve(process.cwd(), '..');
+const statePath = path.resolve(repoRoot, 'data/state.json');
 
 function ensureStateFile() {
   if (!fs.existsSync(statePath)) {
@@ -71,7 +73,6 @@ function finalizeBusinessResearch(state: State, business: Business, providerName
 
   const run = state.researchRuns.find((entry) => entry.businessId === business.id && entry.status === 'running');
   if (run) run.provider = providerName;
-
   writeState(state);
 }
 
@@ -80,10 +81,8 @@ function maybeFinalizeRun(state: State, run: ResearchRun) {
   const elapsed = Date.now() - run.startedAt;
   const total = run.stageDurationsMs.reduce((sum, ms) => sum + ms, 0);
   if (elapsed < total) return;
-
   const business = getBusinessOrThrow(state, run.businessId);
   finalizeBusinessResearch(state, business, run.provider);
-
   run.status = 'complete';
   run.completedAt = new Date().toISOString();
   writeState(state);
@@ -102,7 +101,6 @@ export async function startResearch(businessId: string): Promise<ResearchRespons
   const state = readState();
   ensureSeedBusiness(state);
   const business = getBusinessOrThrow(state, businessId);
-
   const existing = state.researchRuns.find((run) => run.businessId === businessId && run.status === 'running');
   if (existing) {
     maybeFinalizeRun(state, existing);
@@ -116,8 +114,8 @@ export async function startResearch(businessId: string): Promise<ResearchRespons
     status: 'running',
     createdAt: new Date().toISOString(),
     startedAt: Date.now(),
-    stages: ['Resolving business profile', 'Normalizing source findings', 'Synthesizing evidence model', 'Prioritizing opportunities', 'Preparing agent runtime'],
-    stageDurationsMs: [900, 1200, 1200, 900, 1200],
+    stages: ['Resolving business identity', 'Gathering evidence sources', 'Filtering and matching entities', 'Aggregating findings', 'Preparing build workspace'],
+    stageDurationsMs: [700, 1100, 1100, 900, 900],
     provider: provider.name
   };
 
@@ -131,15 +129,31 @@ export async function startResearch(businessId: string): Promise<ResearchRespons
     if (nextBusiness) {
       nextBusiness.sources = result.sources;
       nextBusiness.evidenceItems = result.evidenceItems;
-      nextBusiness.researchBasis = result.provider === 'local-web-research' ? 'website' : nextBusiness.researchBasis ?? 'synthetic';
+      nextBusiness.identity = result.identity;
+      nextBusiness.researchBasis = result.provider === 'demo-fallback' ? (nextBusiness.researchBasis ?? 'demo') : 'hybrid';
+      nextBusiness.researchMetadata = {
+        plannerQuestions: result.plannerQuestions,
+        limitations: result.limitations,
+        providerAvailability: result.providerAvailability,
+        sampleNote: result.sampleNote
+      };
       upsertBusiness(nextState, nextBusiness);
-
       const nextRun = nextState.researchRuns.find((entry) => entry.id === run.id);
       if (nextRun) nextRun.provider = result.provider;
       writeState(nextState);
     }
-  } catch {
-    // Preserve fallback-friendly behavior. The run will complete from whatever candidate data is available.
+  } catch (error) {
+    const nextState = readState();
+    const nextBusiness = nextState.businesses.find((entry) => entry.id === businessId);
+    if (nextBusiness) {
+      nextBusiness.researchMetadata = {
+        plannerQuestions: nextBusiness.researchMetadata?.plannerQuestions ?? [],
+        limitations: [...(nextBusiness.researchMetadata?.limitations ?? []), error instanceof Error ? error.message : 'Research provider failed.'],
+        providerAvailability: nextBusiness.researchMetadata?.providerAvailability ?? []
+      };
+      upsertBusiness(nextState, nextBusiness);
+      writeState(nextState);
+    }
   }
 
   return getResearch(run.id);
@@ -150,7 +164,6 @@ export function getResearch(runId: string): ResearchResponse | null {
   const run = state.researchRuns.find((entry) => entry.id === runId);
   if (!run) return null;
   maybeFinalizeRun(state, run);
-
   const elapsed = Math.max(0, Date.now() - run.startedAt);
   const total = run.stageDurationsMs.reduce((sum, ms) => sum + ms, 0);
   let stageIndex = run.stages.length - 1;
@@ -162,16 +175,9 @@ export function getResearch(runId: string): ResearchResponse | null {
       break;
     }
   }
-
   const business = state.businesses.find((entry) => entry.id === run.businessId);
   if (!business) return null;
-
-  return {
-    run,
-    progress: Math.min(100, Math.round((elapsed / total) * 100)),
-    currentStage: run.status === 'complete' ? 'Complete' : run.stages[stageIndex],
-    business
-  };
+  return { run, progress: Math.min(100, Math.round((elapsed / total) * 100)), currentStage: run.status === 'complete' ? 'Complete' : run.stages[stageIndex], business };
 }
 
 export function selectOpportunity(businessId: string, opportunityId: string) {
@@ -183,6 +189,7 @@ export function selectOpportunity(businessId: string, opportunityId: string) {
   business.runtime = createRuntime(business, selected, business.report);
   business.buildPlan = createBuildPlan(selected, business.runtime.agents);
   business.deployment = createDeployment();
+  executeBuildRun(business, selected, repoRoot);
   upsertBusiness(state, business);
   state.deployments = [business.deployment, ...state.deployments.filter((entry) => entry.id !== business.deployment?.id)].slice(0, 5);
   writeState(state);
@@ -194,31 +201,21 @@ export function updateTask(businessId: string, taskId: string, action: 'advance'
   const business = getBusinessOrThrow(state, businessId);
   const task = business.runtime?.tasks.find((entry) => entry.id === taskId);
   if (!task || !business.runtime) return null;
-
   if (action === 'advance') {
     task.status = task.status === 'queued' ? 'running' : 'done';
-    task.notes = task.status === 'done' ? 'Marked complete from the live dashboard.' : 'Pulled into active execution.';
+    task.notes = task.status === 'done' ? 'Marked complete from the workspace.' : 'Pulled into active execution.';
   } else {
     task.status = 'blocked';
-    task.notes = 'Blocked manually from the live dashboard for operator review.';
+    task.notes = 'Blocked manually from the workspace for operator review.';
   }
-
-  business.runtime.eventLog.unshift({
-    id: `evt-${Date.now()}`,
-    at: new Date().toISOString(),
-    type: 'task-update',
-    actor: 'operator',
-    text: `${task.title} updated to ${task.status}.`,
-    taskId: task.id
-  });
-
+  business.runtime.eventLog.unshift({ id: `evt-${Date.now()}`, at: new Date().toISOString(), type: 'task-update', actor: 'operator', text: `${task.title} updated to ${task.status}.`, taskId: task.id });
   const allDone = business.runtime.tasks.every((entry) => entry.status === 'done');
   if (business.deployment && allDone) {
     business.deployment.state = 'live';
-    business.deployment.history.push({ at: new Date().toISOString(), state: 'live', note: 'All agent tasks completed.' });
+    business.deployment.history.push({ at: new Date().toISOString(), state: 'live', note: 'All bounded tasks completed.' });
+    business.deployment.honestStatus = 'All bounded local tasks completed. No remote deployment was attempted.';
     business.runtime.status = 'stable';
   }
-
   upsertBusiness(state, business);
   writeState(state);
   return business;

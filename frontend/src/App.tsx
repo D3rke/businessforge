@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Card } from './components/Card';
 import { api } from './lib/api';
-import type { AgentTask, Business, BuildPlanStep, DiscoveryInput, DiscoveryResponse, EvidenceItem, Opportunity, ResearchResponse, RuntimeEvent, Source } from './lib/types';
+import type { AgentTask, Business, BuildPlanStep, DiscoveryInput, DiscoveryResponse, EvidenceItem, Opportunity, ResearchMode, ResearchResponse, RuntimeEvent, Source } from './lib/types';
 
 const defaultQuery = "McDonald's";
 const workspaceTabs = ['research', 'findings', 'plan', 'build', 'live'] as const;
@@ -14,6 +14,7 @@ type SearchDraft = {
   query: string;
   websiteUrl: string;
   locationText: string;
+  mode: ResearchMode;
   coordinates?: DiscoveryInput['coordinates'];
 };
 
@@ -79,7 +80,7 @@ function TopNavLink({ to, children }: { to: string; children: ReactNode }) {
 function HomePage() {
   const navigate = useNavigate();
   const recentBusinesses = useRecentBusinesses();
-  const [draft, setDraft] = useState<SearchDraft>({ query: defaultQuery, websiteUrl: '', locationText: '' });
+  const [draft, setDraft] = useState<SearchDraft>({ query: defaultQuery, websiteUrl: '', locationText: '', mode: 'BUSINESS' });
   const [geoState, setGeoState] = useState<'idle' | 'locating' | 'ready' | 'error'>('idle');
 
   const submit = () => navigate(`/businesses?${toDiscoveryParams(draft).toString()}`);
@@ -115,17 +116,27 @@ function HomePage() {
 
         <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
           <div className="space-y-3">
+            <div>
+              <p className="mb-2 block text-sm font-medium text-slate-700">Research mode</p>
+              <div className="flex gap-2">
+                {(['BUSINESS', 'CORPORATION'] as ResearchMode[]).map((mode) => (
+                  <button key={mode} onClick={() => setDraft((current) => ({ ...current, mode, locationText: mode === 'CORPORATION' ? '' : current.locationText, coordinates: mode === 'CORPORATION' ? undefined : current.coordinates }))} className={`rounded-2xl px-4 py-2 text-sm font-semibold ${draft.mode === mode ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-700'}`}>
+                    {mode === 'BUSINESS' ? 'Business' : 'Corporation'}
+                  </button>
+                ))}
+              </div>
+            </div>
             <SearchField label="Business name" value={draft.query} onChange={(value) => setDraft((current) => ({ ...current, query: value }))} placeholder="McDonald's, North Star Dental, coffee shop" />
             <SearchField label="Website" value={draft.websiteUrl} onChange={(value) => setDraft((current) => ({ ...current, websiteUrl: value }))} placeholder="Optional business website" />
-            <SearchField label="Location" value={draft.locationText} onChange={(value) => setDraft((current) => ({ ...current, locationText: value, coordinates: value === 'Near me' ? current.coordinates : undefined }))} placeholder="City, neighborhood, or leave blank" />
+            {draft.mode === 'BUSINESS' ? <SearchField label="Location" value={draft.locationText} onChange={(value) => setDraft((current) => ({ ...current, locationText: value, coordinates: value === 'Near me' ? current.coordinates : undefined }))} placeholder="City, neighborhood, or leave blank" /> : null}
           </div>
           <div className="mt-4 flex flex-wrap gap-3">
             <button onClick={submit} className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white">Analyze business</button>
-            <button onClick={useMyLocation} className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700">
+            {draft.mode === 'BUSINESS' ? <button onClick={useMyLocation} className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700">
               {geoState === 'locating' ? 'Finding location…' : geoState === 'ready' ? 'Using your location' : 'Use my location'}
-            </button>
+            </button> : null}
           </div>
-          <p className="mt-3 text-sm text-slate-500">{geoState === 'error' ? 'Location access was unavailable. You can still search by city or neighborhood.' : 'Keep the input simple. We will use it to find the right business first.'}</p>
+          <p className="mt-3 text-sm text-slate-500">{geoState === 'error' ? 'Location access was unavailable. You can still search by city or neighborhood.' : draft.mode === 'CORPORATION' ? 'Corporation mode samples representative company-level sources honestly.' : 'Keep the input simple. We will use it to find the right business first.'}</p>
         </section>
       </section>
 
@@ -172,6 +183,7 @@ function BusinessesPage() {
     query: searchParams.get('q') ?? '',
     websiteUrl: searchParams.get('website') ?? undefined,
     locationText: searchParams.get('location') === 'Near me' ? undefined : searchParams.get('location') ?? undefined,
+    mode: (searchParams.get('mode') as ResearchMode) || 'BUSINESS',
     coordinates: searchParams.get('lat') && searchParams.get('lng')
       ? { latitude: Number(searchParams.get('lat')), longitude: Number(searchParams.get('lng')) }
       : undefined
@@ -416,6 +428,7 @@ function ResearchTab({ business, groupedSources }: { business: Business; grouped
           <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-5">
             <p className="text-sm font-medium text-slate-900">Status</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{readiness ? 'Research is complete and the findings are ready to review.' : 'Start the investigation from the Businesses screen to generate findings and a build plan.'}</p>
+            {business.researchMetadata?.plannerQuestions?.length ? <ul className="mt-3 space-y-2 text-sm text-slate-500">{business.researchMetadata.plannerQuestions.slice(0, 4).map((question) => <li key={question}>• {question}</li>)}</ul> : null}
           </div>
         </div>
       </Card>
@@ -479,9 +492,12 @@ function FindingsTab({ business, evidenceById, sourcesById }: { business: Busine
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill tone={findingTone(item.sentiment)}>{humanizeFindingType(item.type)}</StatusPill>
                 <span className="text-sm text-slate-400">{humanizeStrength(item.strength)} confidence</span>
+                <span className="text-sm text-slate-400">score {item.confidence}</span>
+                <span className="text-sm text-slate-400">{item.evidenceCount} excerpts</span>
               </div>
               <h3 className="mt-3 text-lg font-semibold text-slate-950">{item.statement}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">Why it matters: {item.implication}</p>
+              {item.supportingExcerpts.length ? <div className="mt-3 space-y-2 text-sm text-slate-500">{item.supportingExcerpts.slice(0, 2).map((excerpt, index) => <p key={`${excerpt.sourceId}-${index}`}>“{excerpt.text}”</p>)}</div> : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 {item.sourceIds.map((sourceId) => sourcesById.get(sourceId)).filter(Boolean).map((source) => (
                   <a key={source?.id} href={source?.url} target="_blank" rel="noreferrer" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300">
@@ -700,6 +716,7 @@ function LiveTab({ business }: { business: Business }) {
                 <p className="mt-2 text-sm text-slate-600">{test.details}</p>
               </div>
             ))}
+            {business.runtime?.buildRuns?.[0] ? <div className="rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"><p className="font-medium text-slate-900">Latest build bundle</p><p className="mt-1">{business.runtime.buildRuns[0].artifacts.length} files created in {business.runtime.buildRuns[0].workspaceDir}</p>{business.runtime.buildRuns[0].repairNotes.length ? <p className="mt-2">Repair notes: {business.runtime.buildRuns[0].repairNotes.join(' ')}</p> : null}</div> : null}
           </div>
         </Card>
       </div>
@@ -720,7 +737,7 @@ function BusinessChooser({ matches, selected, onSelect }: { matches: Business[];
                 <h3 className="text-base font-semibold">{match.name}</h3>
                 {active ? <StatusPill tone="green">Selected</StatusPill> : null}
               </div>
-              <p className="mt-1 text-sm text-slate-500">{match.category} in {match.city}</p>
+              <p className="mt-1 text-sm text-slate-500">{match.mode === 'CORPORATION' ? 'Corporation research' : `${match.category} in ${match.city}`}</p>
               {match.address ? <p className="mt-1 text-sm text-slate-500">{match.address}</p> : null}
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{match.description}</p>
             </div>
@@ -736,11 +753,12 @@ function BusinessSnapshot({ business }: { business: Business }) {
   return (
     <div className="space-y-4 rounded-[22px] border border-slate-200 bg-slate-50 p-5">
       <div className="flex flex-wrap gap-2">
-        <StatusPill tone="slate">{business.category}</StatusPill>
+        <StatusPill tone="slate">{business.mode === 'CORPORATION' ? 'Corporation' : business.category}</StatusPill>
         <StatusPill tone="slate">{business.city}</StatusPill>
         <StatusPill tone="slate">{business.sources.length} sources</StatusPill>
       </div>
       <p className="text-sm leading-6 text-slate-600">{business.description}</p>
+      {business.researchMetadata?.sampleNote ? <p className="text-sm text-slate-500">{business.researchMetadata.sampleNote}</p> : null}
       {business.websiteUrl ? <a href={business.websiteUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-sky-700">View website</a> : null}
     </div>
   );
@@ -754,7 +772,7 @@ function ResearchRunPanel({ run }: { run: ResearchResponse }) {
         <span>{run.progress}%</span>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-slate-900" style={{ width: `${run.progress}%` }} /></div>
-      <p className="mt-3 text-sm text-slate-600">We&apos;re reviewing the business footprint, organizing the evidence, and preparing your findings.</p>
+      <p className="mt-3 text-sm text-slate-600">We&apos;re resolving identity, filtering sources, and keeping the findings traceable to retrieved evidence.</p>
     </div>
   );
 }
@@ -770,7 +788,7 @@ function BusinessList({ businesses, emptyCopy, showStage = false }: { businesses
               <h3 className="font-medium text-slate-900">{business.name}</h3>
               {showStage ? <StatusPill tone={business.stage === 'researched' ? 'green' : 'slate'}>{business.stage === 'researched' ? 'Ready' : 'Found'}</StatusPill> : null}
             </div>
-            <p className="mt-1 text-sm text-slate-500">{business.category} in {business.city}</p>
+            <p className="mt-1 text-sm text-slate-500">{business.mode === 'CORPORATION' ? 'Corporation research' : `${business.category} in ${business.city}`}</p>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{business.report?.summary ?? business.description}</p>
           </div>
           <span className="pt-1 text-sm text-slate-400">Open</span>
@@ -849,7 +867,15 @@ function SourceListItem({ source }: { source: Source }) {
           <h4 className="font-medium text-slate-900">{source.title}</h4>
           <p className="mt-2 text-sm leading-6 text-slate-600">{source.excerpt}</p>
         </div>
-        <StatusPill tone="slate">{formatSourceKind(source.kind)}</StatusPill>
+        <div className="flex flex-col items-end gap-2">
+          <StatusPill tone="slate">{formatSourceKind(source.kind)}</StatusPill>
+          <span className="text-xs text-slate-400">{source.provenance.toLowerCase().replace(/_/g, ' ')}</span>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+        <span>match {source.entityConfidence}</span>
+        <span>quality {source.qualityScore}</span>
+        <span>relevance {source.relevanceScore}</span>
       </div>
       {source.evidence.length ? <ul className="mt-3 space-y-2 text-sm text-slate-500">{source.evidence.slice(0, 2).map((item) => <li key={item}>{item}</li>)}</ul> : null}
       <a href={source.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-medium text-sky-700">View source</a>
@@ -968,6 +994,7 @@ function rememberBusiness(businessId: string) {
 function toDiscoveryParams(draft: SearchDraft) {
   const params = new URLSearchParams();
   params.set('q', draft.query);
+  params.set('mode', draft.mode);
   if (draft.websiteUrl.trim()) params.set('website', draft.websiteUrl.trim());
   if (draft.locationText.trim()) params.set('location', draft.locationText.trim());
   if (draft.coordinates) {
