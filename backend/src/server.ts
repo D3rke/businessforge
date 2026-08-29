@@ -1,11 +1,13 @@
+import path from 'node:path';
 import cors from 'cors';
 import express from 'express';
-import { getBusiness, getDiscovery, getResearch, interact, selectOpportunity, startResearch, updateTask } from './store.js';
+import { getBusiness, getDiscovery, getResearch, interact, readBuildFile, selectOpportunity, startBuild, startResearch, updateTask } from './store.js';
 import type { ResearchMode } from './types.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/generated', express.static(path.resolve(process.cwd(), '..', 'generated')));
 
 function parseMode(input: unknown): ResearchMode | undefined {
   return input === 'BUSINESS' || input === 'CORPORATION' ? input : undefined;
@@ -64,6 +66,28 @@ app.post('/api/business/:businessId/select-opportunity', (req, res) => {
     res.json(selectOpportunity(req.params.businessId, opportunityId));
   } catch {
     res.status(404).json({ error: 'business not found' });
+  }
+});
+
+app.post('/api/business/:businessId/start-build', (req, res) => {
+  try {
+    const business = startBuild(req.params.businessId);
+    if (!business) return res.status(404).json({ error: 'business not found' });
+    res.json(business);
+  } catch {
+    res.status(404).json({ error: 'business not found' });
+  }
+});
+
+app.get('/api/business/:businessId/build-file', (req, res) => {
+  const relativePath = String(req.query.path ?? '');
+  if (!relativePath) return res.status(400).json({ error: 'path required' });
+  try {
+    const file = readBuildFile(req.params.businessId, relativePath);
+    if (!file) return res.status(404).json({ error: 'file not found' });
+    res.json(file);
+  } catch {
+    res.status(400).json({ error: 'invalid file path' });
   }
 });
 

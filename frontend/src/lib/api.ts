@@ -15,6 +15,8 @@ export const api = {
   getResearch: (runId: string) => request<ResearchResponse>(`/api/research/${runId}`),
   getBusiness: (businessId: string) => request<Business>(`/api/business/${businessId}`),
   selectOpportunity: (businessId: string, opportunityId: string) => request<Business>(`/api/business/${businessId}/select-opportunity`, { method: 'POST', body: JSON.stringify({ opportunityId }) }),
+  startBuild: (businessId: string) => request<Business>(`/api/business/${businessId}/start-build`, { method: 'POST' }),
+  readBuildFile: (businessId: string, filePath: string) => request<{ path: string; content: string }>(`/api/business/${businessId}/build-file?path=${encodeURIComponent(filePath)}`),
   updateTask: (businessId: string, taskId: string, action: 'advance' | 'block') => request<Business>(`/api/business/${businessId}/tasks/${taskId}`, { method: 'POST', body: JSON.stringify({ action }) }),
   interact: (businessId: string, agentId: string, message: string) => request<RuntimeInteractionResponse>(`/api/business/${businessId}/runtime/interact`, { method: 'POST', body: JSON.stringify({ agentId, message }) })
 };

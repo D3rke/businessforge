@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { executeBuildRun } from './buildRuntime.js';
+import { createPendingBuildRun, executeBuildRun } from './buildRuntime.js';
 import { createBuildPlan, createDeployment, createOpportunities, createReport, createRuntime } from './demoData.js';
 import { discoverBusinesses } from './discovery.js';
 import { runEvidenceResearch } from './researchPipeline.js';
@@ -19,13 +19,17 @@ async function main() {
       id: 'src-mismatch-austin',
       title: `${localBusiness.name} Austin profile`,
       url: 'https://example.com/austin-profile',
+      originalUrl: 'https://example.com/austin-profile',
+      retrievalUrl: 'https://example.com/austin-profile',
       domain: 'example.com',
       kind: 'directory',
       sourceType: 'general-mention',
+      sourceFamily: 'example.com',
       excerpt: `${localBusiness.name} in Austin, Texas with a different address and market context.`,
       evidence: ['Austin, Texas listing'],
       provenance: 'REAL_RETRIEVED',
       availability: 'available',
+      contentAvailability: 'full',
       qualityScore: 50,
       relevanceScore: 50,
       entityConfidence: 0,
@@ -41,14 +45,18 @@ async function main() {
   const corpBusiness = corpDiscovery.matches[0];
   const corpResearch = await runEvidenceResearch(corpBusiness);
   const realCorpSources = corpResearch.sources.filter((source) => source.provenance === 'REAL_RETRIEVED');
-  if (realCorpSources.length < 2) throw new Error('Corporation mode did not retrieve enough representative real sources.');
-  results.push(`Corporation mode: ${corpBusiness.name} returned ${realCorpSources.length} real representative sources.`);
+  const sourceKinds = new Set(realCorpSources.map((source) => source.kind));
+  if (realCorpSources.length < 4 || !sourceKinds.has('review') || !sourceKinds.has('forum') || !sourceKinds.has('news') || !sourceKinds.has('directory')) {
+    throw new Error('Corporation mode did not retrieve enough representative real sources.');
+  }
+  results.push(`Corporation mode: ${corpBusiness.name} returned ${realCorpSources.length} real representative sources across ${Array.from(sourceKinds).join(', ')}.`);
 
   const researchedBusiness: Business = {
     ...corpBusiness,
     identity: corpResearch.identity,
     sources: corpResearch.sources,
     evidenceItems: corpResearch.evidenceItems,
+    researchEvents: corpResearch.events,
     stage: 'researched',
     researchBasis: 'hybrid',
     deployment: createDeployment(),
@@ -66,18 +74,21 @@ async function main() {
   researchedBusiness.selectedOpportunityId = opportunity.id;
   researchedBusiness.runtime = createRuntime(researchedBusiness, opportunity, report);
   researchedBusiness.buildPlan = createBuildPlan(opportunity, researchedBusiness.runtime.agents);
-  executeBuildRun(researchedBusiness, opportunity, repoRoot);
+  const run = createPendingBuildRun(researchedBusiness, opportunity, repoRoot);
+  researchedBusiness.runtime.buildRuns.unshift(run);
+  await executeBuildRun(researchedBusiness, opportunity, repoRoot, run);
   const latestRun = researchedBusiness.runtime.buildRuns[0];
   if (!latestRun || latestRun.status !== 'passed') throw new Error('Build run failed.');
   for (const artifact of latestRun.artifacts) {
     if (!fs.existsSync(path.join(repoRoot, artifact.path))) throw new Error(`Missing build artifact ${artifact.path}`);
   }
-  const requiredEvents = ['BUILD_STARTED', 'TASK_STARTED', 'FILE_CREATED', 'TEST_STARTED', 'TEST_PASSED', 'DEPLOYMENT_STARTED', 'DEPLOYMENT_COMPLETE', 'BUILD_COMPLETE'] as const;
+  const requiredEvents = ['BUILD_QUEUED', 'BUILD_STARTED', 'TASK_STARTED', 'FILE_CREATED', 'TEST_STARTED', 'TEST_PASSED', 'DEPLOYMENT_STARTED', 'DEPLOYMENT_COMPLETE', 'BUILD_COMPLETE'] as const;
   const seen = new Set(latestRun.events.map((event) => event.type));
   for (const event of requiredEvents) {
     if (!seen.has(event)) throw new Error(`Missing build event ${event}`);
   }
-  results.push(`Build path: created ${latestRun.artifacts.length} artifacts with ${latestRun.events.length} recorded events.`);
+  if (!latestRun.previewUrl) throw new Error('Preview URL missing.');
+  results.push(`Build path: created ${latestRun.artifacts.length} artifacts with ${latestRun.events.length} recorded events and preview ${latestRun.previewUrl}.`);
 
   console.log(results.join('\n'));
 }

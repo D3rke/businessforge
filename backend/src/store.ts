@@ -1,14 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { executeBuildRun } from './buildRuntime.js';
+import { createPendingBuildRun, executeBuildRun } from './buildRuntime.js';
 import { createBuildPlan, createDeployment, createJoeBusiness, createOpportunities, createReport, createRuntime } from './demoData.js';
 import { discoverBusinesses } from './discovery.js';
 import { interactWithRuntime } from './orchestrator.js';
 import { getResearchProvider } from './researchProviders.js';
-import type { Business, DiscoveryInput, DiscoveryResponse, ResearchResponse, ResearchRun, RuntimeInteractionResponse, State } from './types.js';
+import type { BuildRun, Business, DiscoveryInput, DiscoveryResponse, ResearchResponse, ResearchRun, RuntimeInteractionResponse, State } from './types.js';
 
 const repoRoot = path.resolve(process.cwd(), '..');
 const statePath = path.resolve(repoRoot, 'data/state.json');
+const activeBuilds = new Map<string, Promise<void>>();
 
 function ensureStateFile() {
   if (!fs.existsSync(statePath)) {
@@ -88,6 +89,36 @@ function maybeFinalizeRun(state: State, run: ResearchRun) {
   writeState(state);
 }
 
+function syncDeploymentList(state: State, business: Business) {
+  if (!business.deployment) return;
+  state.deployments = [business.deployment, ...state.deployments.filter((entry) => entry.id !== business.deployment?.id)].slice(0, 8);
+}
+
+function startBuildJob(businessId: string, opportunityId: string) {
+  if (activeBuilds.has(businessId)) return;
+  const work = (async () => {
+    const state = readState();
+    const business = getBusinessOrThrow(state, businessId);
+    if (!business.runtime || !business.opportunities) return;
+    const opportunity = business.opportunities.find((entry) => entry.id === opportunityId) ?? business.opportunities[0];
+    let run = business.runtime.buildRuns.find((entry) => entry.opportunityId === opportunity.id && entry.status !== 'passed') as BuildRun | undefined;
+    if (!run) {
+      run = createPendingBuildRun(business, opportunity, repoRoot);
+      business.runtime.buildRuns.unshift(run);
+      business.runtime.status = 'executing';
+      upsertBusiness(state, business);
+      syncDeploymentList(state, business);
+      writeState(state);
+    }
+    await executeBuildRun(business, opportunity, repoRoot, run);
+    const nextState = readState();
+    upsertBusiness(nextState, business);
+    syncDeploymentList(nextState, business);
+    writeState(nextState);
+  })().finally(() => activeBuilds.delete(businessId));
+  activeBuilds.set(businessId, work);
+}
+
 export async function getDiscovery(input: string | DiscoveryInput): Promise<DiscoveryResponse> {
   const state = readState();
   ensureSeedBusiness(state);
@@ -114,8 +145,8 @@ export async function startResearch(businessId: string): Promise<ResearchRespons
     status: 'running',
     createdAt: new Date().toISOString(),
     startedAt: Date.now(),
-    stages: ['Resolving business identity', 'Gathering evidence sources', 'Filtering and matching entities', 'Aggregating findings', 'Preparing build workspace'],
-    stageDurationsMs: [700, 1100, 1100, 900, 900],
+    stages: ['Resolving business identity', 'Gathering official, review, forum, news, and directory evidence', 'Filtering and matching entities', 'Aggregating findings', 'Preparing build workspace'],
+    stageDurationsMs: [700, 1500, 1200, 900, 900],
     provider: provider.name
   };
 
@@ -130,6 +161,7 @@ export async function startResearch(businessId: string): Promise<ResearchRespons
       nextBusiness.sources = result.sources;
       nextBusiness.evidenceItems = result.evidenceItems;
       nextBusiness.identity = result.identity;
+      nextBusiness.researchEvents = result.events;
       nextBusiness.researchBasis = result.provider === 'demo-fallback' ? (nextBusiness.researchBasis ?? 'demo') : 'hybrid';
       nextBusiness.researchMetadata = {
         plannerQuestions: result.plannerQuestions,
@@ -189,11 +221,29 @@ export function selectOpportunity(businessId: string, opportunityId: string) {
   business.runtime = createRuntime(business, selected, business.report);
   business.buildPlan = createBuildPlan(selected, business.runtime.agents);
   business.deployment = createDeployment();
-  executeBuildRun(business, selected, repoRoot);
   upsertBusiness(state, business);
-  state.deployments = [business.deployment, ...state.deployments.filter((entry) => entry.id !== business.deployment?.id)].slice(0, 5);
+  syncDeploymentList(state, business);
   writeState(state);
   return business;
+}
+
+export function startBuild(businessId: string) {
+  const state = readState();
+  const business = getBusinessOrThrow(state, businessId);
+  if (!business.report || !business.opportunities || !business.runtime || !business.selectedOpportunityId) return business;
+  const selected = business.opportunities.find((entry) => entry.id === business.selectedOpportunityId) ?? business.opportunities[0];
+  const existing = business.runtime.buildRuns.find((run) => run.opportunityId === selected.id && (run.status === 'pending' || run.status === 'running'));
+  if (!existing) {
+    const pending = createPendingBuildRun(business, selected, repoRoot);
+    business.runtime.buildRuns.unshift(pending);
+    business.runtime.status = 'executing';
+    business.runtime.eventLog.unshift({ id: `evt-${Date.now()}`, at: new Date().toISOString(), type: 'system', actor: 'system', text: `Build approved for ${selected.title}.` });
+    upsertBusiness(state, business);
+    syncDeploymentList(state, business);
+    writeState(state);
+    startBuildJob(businessId, selected.id);
+  }
+  return getBusiness(businessId);
 }
 
 export function updateTask(businessId: string, taskId: string, action: 'advance' | 'block') {
@@ -217,6 +267,7 @@ export function updateTask(businessId: string, taskId: string, action: 'advance'
     business.runtime.status = 'stable';
   }
   upsertBusiness(state, business);
+  syncDeploymentList(state, business);
   writeState(state);
   return business;
 }
@@ -226,6 +277,7 @@ export function interact(businessId: string, agentId: string, message: string): 
   const business = getBusinessOrThrow(state, businessId);
   const response = interactWithRuntime(business, agentId, message);
   upsertBusiness(state, response.business);
+  syncDeploymentList(state, response.business);
   writeState(state);
   return response;
 }
@@ -233,4 +285,15 @@ export function interact(businessId: string, agentId: string, message: string): 
 export function getBusiness(businessId: string) {
   const state = readState();
   return state.businesses.find((entry) => entry.id === businessId) ?? null;
+}
+
+export function readBuildFile(businessId: string, relativePath: string) {
+  const business = getBusiness(businessId);
+  const latestRun = business?.runtime?.buildRuns?.[0];
+  if (!business || !latestRun) return null;
+  const candidate = path.resolve(repoRoot, relativePath);
+  const runRoot = path.resolve(latestRun.workspaceDir);
+  if (!candidate.startsWith(runRoot)) throw new Error('invalid file path');
+  if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) return null;
+  return { path: relativePath, content: fs.readFileSync(candidate, 'utf8') };
 }

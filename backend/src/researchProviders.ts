@@ -1,6 +1,6 @@
 import { createEvidenceItems } from './demoData.js';
 import { runEvidenceResearch } from './researchPipeline.js';
-import type { Business, BusinessIdentity, EvidenceItem, Source } from './types.js';
+import type { Business, BusinessIdentity, EvidenceItem, ResearchEvent, Source } from './types.js';
 
 export type ResearchProviderResult = {
   provider: string;
@@ -10,6 +10,7 @@ export type ResearchProviderResult = {
   plannerQuestions: string[];
   limitations: string[];
   providerAvailability: string[];
+  events: ResearchEvent[];
   sampleNote?: string;
 };
 
@@ -33,7 +34,8 @@ class LocalEvidenceProvider implements ResearchProvider {
         identity: business.identity,
         plannerQuestions: business.researchMetadata?.plannerQuestions ?? [],
         limitations: ['Using demo fallback sources only.'],
-        providerAvailability: ['live retrieval skipped for demo-seeded business']
+        providerAvailability: ['live retrieval skipped for demo-seeded business'],
+        events: [{ id: 'revt-demo', at: new Date().toISOString(), type: 'RESEARCH_COMPLETE', text: 'Demo-seeded business kept demo research path.' }]
       };
     }
     return runEvidenceResearch(business);
@@ -62,7 +64,9 @@ class ExternalResearchProvider implements ResearchProvider {
       identity: payload.identity ?? business.identity,
       plannerQuestions: payload.plannerQuestions ?? [],
       limitations: payload.limitations ?? ['External provider did not supply limitations.'],
-      providerAvailability: payload.providerAvailability ?? []
+      providerAvailability: payload.providerAvailability ?? [],
+      events: payload.events ?? [],
+      sampleNote: payload.sampleNote
     };
   }
 }
