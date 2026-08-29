@@ -65,20 +65,20 @@ function LandingPage() {
         <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-orange-700">
-              BusinessForge <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> live discovery
+              BusinessForge <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> local intelligence
             </div>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-              Search real local businesses, then build a focused growth workspace.
+              Find a business, uncover what matters, and launch the right AI team.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              Start with a business name, city, or near-me search. BusinessForge now uses live public place search first, with website research and fallback synthesis behind it.
+              Start with a company name, a location, or a website. BusinessForge turns public signals into a clear plan, then brings the working team online in one place.
             </p>
           </div>
 
           <div className="grid gap-3 rounded-[1.75rem] border border-slate-200/80 bg-slate-50/80 p-4">
-            <SearchField label="Business" value={query} onChange={setQuery} placeholder="McDonald's, North Star Dental, coffee shop" />
-            <SearchField label="Place" value={locationText} onChange={setLocationText} placeholder="Seattle, Austin, or leave blank and use Near me" />
-            <SearchField label="Website" value={websiteUrl} onChange={setWebsiteUrl} placeholder="Optional public website" />
+            <SearchField label="Business name" value={query} onChange={setQuery} placeholder="McDonald's, North Star Dental, coffee shop" />
+            <SearchField label="Location" value={locationText} onChange={setLocationText} placeholder="Seattle, Austin, or leave blank and use Near me" />
+            <SearchField label="Website" value={websiteUrl} onChange={setWebsiteUrl} placeholder="Optional company website" />
             <div className="flex flex-wrap gap-3 pt-1">
               <button onClick={submit} className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white">Find businesses</button>
               <button onClick={useMyLocation} className="rounded-2xl border border-sky-200 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-700">
@@ -86,7 +86,7 @@ function LandingPage() {
               </button>
             </div>
             <p className="text-sm text-slate-500">
-              {geoState === 'error' ? 'Location access was unavailable. You can still search by city or region.' : 'Try “McDonald\'s” plus Near me to pull nearby candidates from public map data.'}
+              {geoState === 'error' ? 'Location access was unavailable. You can still search by city or region.' : 'Use Near me for brand searches like McDonald\'s to pull nearby locations.'}
             </p>
           </div>
         </div>
@@ -163,9 +163,9 @@ function ResultsPage() {
       {error ? <p className="mt-4 rounded-full bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card title="Candidate matches" subtitle="Live provider-backed results first, graceful fallback second">
+        <Card title="Candidate matches" subtitle="The strongest business matches for this search">
           <div className="space-y-3">
-            {loading ? <LoadingPanel label="Searching public place providers" /> : null}
+            {loading ? <LoadingPanel label="Searching for matching businesses" /> : null}
             {!loading && !matches.length ? <EmptyState copy="No candidates came back. Try a broader name, add a city, or use Near me." /> : null}
             {matches.map((match) => {
               const active = selected?.id === match.id;
@@ -180,7 +180,7 @@ function ResultsPage() {
                     </div>
                     <div className="text-right">
                       <StatusPill tone={active ? 'orange' : 'slate'}>{match.discoveryScore} match</StatusPill>
-                      {match.discoveryProvider ? <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">{match.discoveryProvider}</p> : null}
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">{formatDiscoveryLabel(match)}</p>
                     </div>
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-600">{match.description}</p>
@@ -190,14 +190,14 @@ function ResultsPage() {
           </div>
         </Card>
 
-        <Card title={selected?.name ?? 'Selection'} subtitle={selected ? 'Run analysis to open the workspace' : 'Pick a business first'}>
+        <Card title={selected?.name ?? 'Selection'} subtitle={selected ? 'Review the business and open its plan' : 'Pick a business first'}>
           {selected ? (
             <div className="space-y-4">
               <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
                 <div className="flex flex-wrap gap-2">
-                  <StatusPill tone="green">{selected.stage}</StatusPill>
-                  <StatusPill tone="slate">{selected.researchBasis ?? 'provider'}</StatusPill>
+                  <StatusPill tone="green">Ready</StatusPill>
                   <StatusPill tone="slate">{selected.sources.length} source{selected.sources.length === 1 ? '' : 's'}</StatusPill>
+                  {selected.websiteUrl ? <StatusPill tone="slate">Website linked</StatusPill> : null}
                 </div>
                 <p className="mt-4 text-sm leading-6 text-slate-600">{selected.description}</p>
               </div>
@@ -205,7 +205,7 @@ function ResultsPage() {
                 <div className="rounded-3xl border border-orange-100 bg-gradient-to-r from-orange-50 to-white p-5">
                   <div className="flex items-center justify-between text-sm text-slate-600"><span>{run.currentStage}</span><span>{run.progress}%</span></div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-white"><div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400" style={{ width: `${run.progress}%` }} /></div>
-                  <p className="mt-3 text-sm text-slate-600">Provider: {run.run.provider}</p>
+                  <p className="mt-3 text-sm text-slate-600">We&apos;re collecting sources, shaping findings, and preparing the build plan.</p>
                 </div>
               ) : null}
               <button onClick={startResearch} disabled={!selected || Boolean(run && run.run.status !== 'complete')} className="w-full rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">
@@ -274,9 +274,9 @@ function WorkspacePage() {
               <p className="mt-2 text-sm text-slate-500">{business.category} in {business.city}{business.address ? ` · ${business.address}` : ''}</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <StatusPill tone="green">{business.stage}</StatusPill>
-              <StatusPill tone="slate">{business.researchBasis ?? 'provider'}</StatusPill>
-              {business.discoveryProvider ? <StatusPill tone="slate">{business.discoveryProvider}</StatusPill> : null}
+              <StatusPill tone="green">{formatStageLabel(business.stage)}</StatusPill>
+              <StatusPill tone="slate">{business.sources.length} sources</StatusPill>
+              {business.websiteUrl ? <StatusPill tone="slate">Website connected</StatusPill> : null}
             </div>
           </div>
 
@@ -304,7 +304,7 @@ function WorkspacePage() {
 function OverviewTab({ business, selectedOpportunity, onSelectOpportunity }: { business: Business; selectedOpportunity?: Opportunity; onSelectOpportunity: (opportunityId: string) => void; }) {
   return (
     <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-      <Card title="Overview" subtitle="A lighter workspace with just the useful signals">
+      <Card title="Overview" subtitle="The clearest picture of this business right now">
         <div className="grid gap-4 sm:grid-cols-3">
           <MiniStat label="Sources" value={business.sources.length} />
           <MiniStat label="Opportunities" value={business.opportunities?.length ?? 0} />
@@ -330,7 +330,7 @@ function OverviewTab({ business, selectedOpportunity, onSelectOpportunity }: { b
 function SourcesTab({ groups }: { groups: ReturnType<typeof groupSources>; }) {
   return (
     <div className="space-y-6">
-      <Card title="Top sources" subtitle="Grouped by site, with the clearest public evidence surfaced first">
+      <Card title="Top sources" subtitle="See what each site contributed without digging through noise">
         <div className="space-y-3">
           {groups.top.map((group) => (
             <details key={group.key} className="group rounded-3xl border border-slate-200 bg-white p-5" open>
@@ -353,7 +353,7 @@ function SourcesTab({ groups }: { groups: ReturnType<typeof groupSources>; }) {
       </Card>
 
       {groups.other.length ? (
-        <Card title="Other sources" subtitle="Remaining source material grouped together to keep the view clean">
+        <Card title="Other sources" subtitle="Additional material grouped together to keep this page clean">
           <div className="space-y-3">{groups.other.map((source) => <SourceRow key={source.id} source={source} />)}</div>
         </Card>
       ) : null}
@@ -363,22 +363,22 @@ function SourcesTab({ groups }: { groups: ReturnType<typeof groupSources>; }) {
 
 function OpportunitiesTab({ business, selectedOpportunityId, onSelectOpportunity }: { business: Business; selectedOpportunityId?: string; onSelectOpportunity: (opportunityId: string) => void; }) {
   return (
-    <Card title="Opportunities" subtitle="Evidence-backed paths you can branch into">
+    <Card title="Opportunities" subtitle="Choose the direction worth building next">
       <OpportunitiesList opportunities={business.opportunities ?? []} selectedOpportunityId={selectedOpportunityId} onSelectOpportunity={onSelectOpportunity} />
     </Card>
   );
 }
 
 function AgentsTab({ business, onUpdateTask, agentMessage, onAgentMessage, onInteract }: { business: Business; onUpdateTask: (taskId: string, action: 'advance' | 'block') => void; agentMessage: string; onAgentMessage: (value: string) => void; onInteract: () => void; }) {
-  if (!business.runtime) return <EmptyState copy="Select an opportunity to build the live agent workspace." />;
+  if (!business.runtime) return <EmptyState copy="Choose a path to bring the working team online." />;
   const activeCount = business.runtime.tasks.filter((task) => task.status === 'running').length;
   return (
     <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-6">
-        <Card title="Agent build" subtitle="Visible emergence, handoffs, and execution status">
+        <Card title="AI team" subtitle="Who is being created, what they own, and what is already in motion">
           <div className="space-y-4">
             <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
-              <div className="flex items-center justify-between text-sm text-slate-600"><span>Runtime status</span><span>{business.runtime.status}</span></div>
+              <div className="flex items-center justify-between text-sm text-slate-600"><span>Team status</span><span>{formatRuntimeStatus(business.runtime.status)}</span></div>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <MiniStat label="Agents" value={business.runtime.agents.length} />
                 <MiniStat label="Running" value={activeCount} />
@@ -389,10 +389,10 @@ function AgentsTab({ business, onUpdateTask, agentMessage, onAgentMessage, onInt
           </div>
         </Card>
 
-        <Card title="Live interaction" subtitle="Operator messages route into the current runtime graph">
+        <Card title="Team instructions" subtitle="Send a request to the active team and keep the build moving">
           <textarea value={agentMessage} onChange={(e) => onAgentMessage(e.target.value)} className="min-h-28 w-full rounded-3xl border border-slate-200 bg-white p-4 text-sm text-slate-900 outline-none" />
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">{business.runtime.missingCapabilities.length ? `Still simulated externally: ${business.runtime.missingCapabilities.join(', ')}` : 'No missing internal runtime capabilities for the selected path.'}</p>
+            <p className="text-sm text-slate-500">{business.runtime.missingCapabilities.length ? `A few steps still need outside systems: ${business.runtime.missingCapabilities.map(formatCapabilityLabel).join(', ')}` : 'This plan can be coordinated inside BusinessForge right now.'}</p>
             <button onClick={onInteract} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">Send</button>
           </div>
         </Card>
@@ -406,7 +406,7 @@ function AgentsTab({ business, onUpdateTask, agentMessage, onAgentMessage, onInt
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="flex items-center gap-3"><LiveDot active={task.status === 'running'} /><h3 className="font-semibold text-slate-950">{index + 1}. {task.title}</h3><StatusPill tone={task.status === 'done' ? 'green' : task.status === 'blocked' ? 'amber' : task.status === 'running' ? 'orange' : 'slate'}>{task.status}</StatusPill></div>
-                    <p className="mt-2 text-sm text-slate-500">{task.agentId}</p>
+                    <p className="mt-2 text-sm text-slate-500">Owner: {getAgentName(business, task.agentId)}</p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{task.notes}</p>
                   </div>
                   <div className="flex gap-2">
@@ -419,7 +419,7 @@ function AgentsTab({ business, onUpdateTask, agentMessage, onAgentMessage, onInt
           </div>
         </Card>
 
-        <Card title="Current output" subtitle="Focused artifact preview for the selected opportunity">
+        <Card title="Current output" subtitle="A customer-facing asset taking shape from the selected path">
           <div className="rounded-[1.75rem] border border-orange-100 bg-[linear-gradient(180deg,_#fff7ed_0%,_#ffffff_40%,_#fffaf5_100%)] p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-700">Preview</p>
             <h3 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{business.runtime.assetPreview.headline}</h3>
@@ -441,7 +441,7 @@ function ActivityTab({ business }: { business: Business; }) {
             <div key={event.id} className="flex items-start justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-4">
               <div>
                 <p className="text-sm text-slate-700">{event.text}</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">{event.type} · {event.actor}</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">{formatEventType(event.type)} · {formatActorLabel(business, event.actor)}</p>
               </div>
               <p className="whitespace-nowrap text-xs text-slate-400">{new Date(event.at).toLocaleTimeString()}</p>
             </div>
@@ -504,7 +504,7 @@ function SourceRow({ source }: { source: Source; }) {
           <h4 className="font-semibold text-slate-900">{source.title}</h4>
           <a href={source.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-xs uppercase tracking-[0.16em] text-sky-700">Open source</a>
         </div>
-        <StatusPill tone="slate">{source.kind}</StatusPill>
+        <StatusPill tone="slate">{formatSourceKind(source.kind)}</StatusPill>
       </div>
       <p className="mt-2 text-sm leading-6 text-slate-600">{source.excerpt}</p>
       <div className="mt-3 flex flex-wrap gap-2">{source.evidence.map((item) => <MetricChip key={item} label={item} />)}</div>
@@ -547,7 +547,7 @@ function safeHostname(url: string) {
 }
 
 function AgentCard({ agent, index }: { agent: AgentDefinition; index: number; }) {
-  return <div className="rounded-3xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">{index + 1}</div><div><h3 className="font-semibold text-slate-950">{agent.name}</h3><p className="text-sm text-slate-500">{agent.role}</p></div></div><p className="mt-3 text-sm leading-6 text-slate-600">{agent.goal}</p></div><div className="flex items-center gap-2"><LiveDot active={index < 2} /><StatusPill tone={index < 2 ? 'orange' : 'slate'}>{index < 2 ? 'emerging' : 'queued'}</StatusPill></div></div><div className="mt-4 flex flex-wrap gap-2">{agent.outputs.map((output) => <MetricChip key={output} label={output} />)}</div></div>;
+  return <div className="rounded-3xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">{index + 1}</div><div><h3 className="font-semibold text-slate-950">{agent.name}</h3><p className="text-sm text-slate-500">{formatRoleLabel(agent.role)}</p></div></div><p className="mt-3 text-sm leading-6 text-slate-600">{agent.goal}</p></div><div className="flex items-center gap-2"><LiveDot active={index < 2} /><StatusPill tone={index < 2 ? 'orange' : 'slate'}>{index < 2 ? 'emerging' : 'queued'}</StatusPill></div></div><div className="mt-4 flex flex-wrap gap-2">{agent.outputs.map((output) => <MetricChip key={output} label={output} />)}</div></div>;
 }
 
 function LoadingPanel({ label }: { label: string; }) {
@@ -573,4 +573,81 @@ function MetricChip({ label }: { label: string; }) {
 function StatusPill({ children, tone }: { children: ReactNode; tone: 'slate' | 'green' | 'amber' | 'orange'; }) {
   const tones = { slate: 'border-slate-200 bg-slate-100 text-slate-700', green: 'border-emerald-200 bg-emerald-50 text-emerald-700', amber: 'border-amber-200 bg-amber-50 text-amber-700', orange: 'border-orange-200 bg-orange-50 text-orange-700' } as const;
   return <span className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${tones[tone]}`}>{children}</span>;
+}
+
+function formatDiscoveryLabel(business: Business) {
+  if (business.websiteUrl) return 'Website matched';
+  if (business.address) return 'Local result';
+  return 'Business match';
+}
+
+function formatStageLabel(stage?: string) {
+  switch (stage) {
+    case 'discovered':
+      return 'Business found';
+    case 'researching':
+      return 'Analysis running';
+    case 'analyzed':
+      return 'Analysis ready';
+    case 'deploying':
+      return 'Going live';
+    case 'live':
+      return 'Live';
+    default:
+      return 'Ready';
+  }
+}
+
+function formatRuntimeStatus(status: string) {
+  switch (status) {
+    case 'executing':
+      return 'In progress';
+    case 'stable':
+      return 'Running';
+    case 'ready':
+      return 'Ready';
+    default:
+      return 'Preparing';
+  }
+}
+
+function formatSourceKind(kind: string) {
+  const label = {
+    website: 'Website',
+    review: 'Reviews',
+    directory: 'Directory',
+    social: 'Social',
+    news: 'News'
+  }[kind as 'website' | 'review' | 'directory' | 'social' | 'news'];
+  return label ?? startCase(kind);
+}
+
+function formatRoleLabel(role: string) {
+  return startCase(role.replace(/[-_]/g, ' '));
+}
+
+function formatEventType(type: string) {
+  return startCase(type.replace(/[-_]/g, ' '));
+}
+
+function formatActorLabel(business: Business, actor: string) {
+  const match = business.runtime?.agents.find((agent) => agent.id === actor || agent.name === actor);
+  if (match) return match.name;
+  return startCase(actor.replace(/[-_]/g, ' '));
+}
+
+function formatCapabilityLabel(capability: string) {
+  return startCase(capability.replace(/[-_]/g, ' '));
+}
+
+function getAgentName(business: Business, agentId: string) {
+  return business.runtime?.agents.find((agent) => agent.id === agentId)?.name ?? formatActorLabel(business, agentId);
+}
+
+function startCase(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
