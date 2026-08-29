@@ -1,0 +1,18 @@
+import type { Business, ResearchResponse } from './types';
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...init
+  });
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  discover: (q: string) => request<{ matches: Business[]; suggestion: string | null }>(`/api/discover?q=${encodeURIComponent(q)}`),
+  startResearch: (businessId: string) => request<ResearchResponse>('/api/research/start', { method: 'POST', body: JSON.stringify({ businessId }) }),
+  getResearch: (runId: string) => request<ResearchResponse>(`/api/research/${runId}`),
+  selectOpportunity: (businessId: string, opportunityId: string) => request<Business>(`/api/business/${businessId}/select-opportunity`, { method: 'POST', body: JSON.stringify({ opportunityId }) }),
+  updateTask: (businessId: string, taskId: string, action: 'advance' | 'block') => request<Business>(`/api/business/${businessId}/tasks/${taskId}`, { method: 'POST', body: JSON.stringify({ action }) })
+};
