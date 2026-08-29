@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Card } from './components/Card';
 import { api } from './lib/api';
-import type { Business, ResearchResponse } from './lib/types';
+import type { AgentDefinition, Business, ResearchResponse } from './lib/types';
 
 const defaultQuery = "Joe's Pizza";
+const lifecycleStates = ['draft', 'validating', 'deploying', 'live'] as const;
 
 export default function App() {
   const [query, setQuery] = useState(defaultQuery);
@@ -74,93 +76,166 @@ export default function App() {
     setBusiness(next);
   };
 
-  return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8">
-        <header className="rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-slate-900 to-slate-950 p-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm uppercase tracking-[0.25em] text-orange-300">BusinessForge</p>
-              <h1 className="mt-2 text-4xl font-bold text-white">Turn business research into a live agent execution plan</h1>
-              <p className="mt-3 max-w-3xl text-slate-300">A real demo-mode vertical slice: discover a business, run staged research, inspect source-backed intelligence, choose an opportunity, generate a dynamic agent architecture, and operate the runtime from a live dashboard.</p>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-sm text-slate-300">
-              Demo data included, no API keys required.
-            </div>
-          </div>
+  const metrics = [
+    { label: 'Source coverage', value: `${business?.sources.length ?? 0} inputs`, hint: 'Search, review, and local signals' },
+    { label: 'Opportunity score', value: selectedOpportunity ? `${selectedOpportunity.impact}/10 impact` : 'Awaiting selection', hint: 'Prioritized against confidence and effort' },
+    { label: 'Runtime status', value: business?.runtime?.status ?? 'Planning', hint: 'Execution state updates live below' }
+  ];
 
-          <div className="mt-6 flex flex-col gap-3 md:flex-row">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500"
-              placeholder="Search for a local business"
-            />
-            <button onClick={search} disabled={loading} className="rounded-2xl bg-orange-500 px-5 py-3 font-medium text-slate-950 hover:bg-orange-400 disabled:opacity-50">
-              {loading ? 'Working...' : 'Search'}
-            </button>
-            <button onClick={startResearch} disabled={!business || loading} className="rounded-2xl border border-orange-400/40 bg-orange-500/10 px-5 py-3 font-medium text-orange-200 hover:bg-orange-500/20 disabled:opacity-50">
-              Run research
-            </button>
+  return (
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,146,60,0.16),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.10),_transparent_24%),linear-gradient(180deg,_#fffdf8_0%,_#f8fafc_46%,_#f6f7fb_100%)] text-slate-900">
+      <div className="mx-auto max-w-7xl px-5 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <section className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-white/80 p-6 shadow-[0_30px_90px_-40px_rgba(15,23,42,0.35)] backdrop-blur sm:p-8 lg:p-10">
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(255,255,255,0.62))]" />
+          <div className="absolute -right-16 top-0 h-56 w-56 rounded-full bg-orange-200/40 blur-3xl" />
+          <div className="absolute left-1/3 top-10 h-40 w-40 rounded-full bg-sky-200/30 blur-3xl" />
+          <div className="relative">
+            <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
+              <div className="max-w-3xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-orange-700">
+                  BusinessForge
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Live workspace
+                </div>
+                <h1 className="mt-5 max-w-4xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+                  Turn business discovery into a launch-ready operating plan.
+                </h1>
+                <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+                  Search a business, build a source-backed point of view, choose the best growth wedge, and move into a clear execution workflow without leaving the workspace.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3 xl:w-[30rem] xl:grid-cols-1">
+                {metrics.map((metric) => (
+                  <div key={metric.label} className="rounded-2xl border border-slate-200/80 bg-white/85 p-4 shadow-sm shadow-slate-200/50 transition-transform duration-200 hover:-translate-y-0.5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{metric.label}</p>
+                    <p className="mt-2 text-lg font-semibold text-slate-900">{metric.value}</p>
+                    <p className="mt-1 text-sm text-slate-500">{metric.hint}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+              <label className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm shadow-slate-200/60 transition focus-within:border-orange-300 focus-within:shadow-orange-100">
+                <span className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-500">Search</span>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="w-full bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400"
+                  placeholder="Search for a local business"
+                />
+              </label>
+              <button
+                onClick={search}
+                disabled={loading}
+                className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-300 transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:translate-y-0 disabled:opacity-50"
+              >
+                {loading ? 'Updating…' : 'Refresh profile'}
+              </button>
+              <button
+                onClick={startResearch}
+                disabled={!business || loading}
+                className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-orange-400 disabled:translate-y-0 disabled:opacity-50"
+              >
+                {run && run.run.status !== 'complete' ? 'Researching…' : 'Run analysis'}
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+              {suggestion ? <p className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600">{suggestion}</p> : null}
+              <p className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700">Sample workspace included, no setup friction</p>
+              {error ? <p className="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700">{error}</p> : null}
+            </div>
           </div>
-          {suggestion ? <p className="mt-3 text-sm text-slate-400">{suggestion}</p> : null}
-          {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
-        </header>
+        </section>
 
         {business ? (
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
             <div className="space-y-6">
-              <Card title={business.name} subtitle={`${business.category} • ${business.city}`} right={<span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">demo target</span>}>
-                <p className="text-slate-300">{business.description}</p>
-              </Card>
-
-              <Card title="Research run" subtitle="Staged progress with realistic demo orchestration">
-                {run ? (
-                  <div className="space-y-3">
-                    <div className="h-3 overflow-hidden rounded-full bg-slate-800">
-                      <div className="h-full bg-orange-500" style={{ width: `${run.progress}%` }} />
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-slate-300">
-                      <span>{run.currentStage}</span>
-                      <span>{run.progress}%</span>
-                    </div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Status: {run.run.status}</p>
+              <Card
+                title={business.name}
+                subtitle={`${business.category} in ${business.city}`}
+                right={<StatusPill tone="green">Profile loaded</StatusPill>}
+              >
+                <div className="grid gap-5 lg:grid-cols-[1.3fr_0.7fr]">
+                  <div>
+                    <p className="text-[15px] leading-7 text-slate-600">{business.description}</p>
                   </div>
-                ) : (
-                  <p className="text-slate-400">Search Joe&apos;s Pizza, then run research to unlock the full flow.</p>
-                )}
+                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                    <MiniStat label="Signals" value={business.report?.marketSignals.length ?? business.sources.length} />
+                    <MiniStat label="Opportunities" value={business.opportunities?.length ?? 0} />
+                    <MiniStat label="Active tasks" value={business.runtime?.tasks.length ?? 0} />
+                  </div>
+                </div>
               </Card>
 
-              <Card title="Source explorer" subtitle="Inspectable evidence behind every conclusion">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {business.sources.map((source) => (
-                    <div key={source.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="font-medium text-white">{source.title}</h3>
-                        <span className="rounded-full bg-slate-800 px-2 py-1 text-xs text-slate-300">{source.kind}</span>
-                      </div>
-                      <p className="mt-2 text-sm text-slate-400">{source.excerpt}</p>
-                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-300">
-                        {source.evidence.map((item) => <li key={item}>{item}</li>)}
-                      </ul>
+              <Card title="Workspace progress" subtitle="From discovery to execution, in one flow">
+                <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div className="rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-sky-50 p-5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-slate-700">Analysis status</span>
+                      <span className="text-slate-500">{run?.progress ?? 0}%</span>
                     </div>
+                    <div className="mt-3 h-3 overflow-hidden rounded-full bg-white shadow-inner">
+                      <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-all duration-500" style={{ width: `${run?.progress ?? 0}%` }} />
+                    </div>
+                    <p className="mt-4 text-lg font-semibold text-slate-900">{run?.currentStage ?? 'Ready to start analysis'}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {run ? `Current run is ${run.run.status}.` : 'Start analysis to generate the report, opportunities, and runtime plan.'}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <StageCard title="Discover" active completed={!!business} copy="Load the business profile and baseline context." />
+                    <StageCard title="Research" active={!!run && run.run.status !== 'complete'} completed={!!business.report} copy="Gather supporting evidence and shape the narrative." />
+                    <StageCard title="Prioritize" active={!!business.opportunities && !business.runtime} completed={!!selectedOpportunity} copy="Select the wedge with the best leverage." />
+                    <StageCard title="Operate" active={!!business.runtime} completed={!!business.runtime} copy="Track launch readiness and live task flow." />
+                  </div>
+                </div>
+              </Card>
+
+              <Card title="Source signals" subtitle="The inputs shaping the recommendation">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {business.sources.map((source) => (
+                    <article key={source.id} className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/70 transition duration-200 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{source.kind}</p>
+                          <h3 className="mt-2 text-lg font-semibold text-slate-900">{source.title}</h3>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{source.evidence.length} signals</span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">{source.excerpt}</p>
+                      <ul className="mt-4 space-y-2 text-sm text-slate-700">
+                        {source.evidence.map((item) => (
+                          <li key={item} className="flex gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-orange-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
                   ))}
                 </div>
               </Card>
 
               {business.report ? (
-                <Card title="Intelligence report" subtitle="Evidence-backed synthesis">
-                  <p className="text-slate-200">{business.report.summary}</p>
-                  <div className="mt-4 grid gap-4 md:grid-cols-3">
-                    <List title="Strengths" items={business.report.strengths} />
-                    <List title="Gaps" items={business.report.gaps} />
-                    <List title="Signals" items={business.report.marketSignals} />
+                <Card title="Market brief" subtitle="A cleaner summary of where momentum exists">
+                  <div className="rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-950 to-slate-800 p-6 text-white shadow-lg shadow-slate-300/50">
+                    <p className="text-sm uppercase tracking-[0.24em] text-slate-300">Executive summary</p>
+                    <p className="mt-3 max-w-3xl text-lg leading-8 text-slate-100">{business.report.summary}</p>
                   </div>
-                  <div className="mt-4 space-y-2">
+                  <div className="mt-5 grid gap-4 md:grid-cols-3">
+                    <InsightList title="Strengths" items={business.report.strengths} tone="green" />
+                    <InsightList title="Gaps" items={business.report.gaps} tone="amber" />
+                    <InsightList title="Signals" items={business.report.marketSignals} tone="sky" />
+                  </div>
+                  <div className="mt-5 grid gap-3">
                     {business.report.evidence.map((item) => (
-                      <div key={item.claim} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm">
-                        <p className="text-slate-200">{item.claim}</p>
-                        <p className="mt-1 text-slate-400">Sources: {item.sourceIds.join(', ')}</p>
+                      <div key={item.claim} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                        <p className="font-medium text-slate-900">{item.claim}</p>
+                        <p className="mt-1 text-sm text-slate-500">Referenced by {item.sourceIds.join(', ')}</p>
                       </div>
                     ))}
                   </div>
@@ -168,21 +243,35 @@ export default function App() {
               ) : null}
 
               {business.opportunities ? (
-                <Card title="Opportunity selection" subtitle="Choose the highest-leverage wedge">
-                  <div className="space-y-3">
-                    {business.opportunities.map((opp) => {
+                <Card title="Recommended wedges" subtitle="Select the next move with the clearest upside">
+                  <div className="space-y-4">
+                    {business.opportunities.map((opp, index) => {
                       const selected = opp.id === business.selectedOpportunityId;
                       return (
-                        <button key={opp.id} onClick={() => chooseOpportunity(opp.id)} className={`w-full rounded-2xl border p-4 text-left ${selected ? 'border-orange-400 bg-orange-500/10' : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'}`}>
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <h3 className="font-medium text-white">{opp.title}</h3>
-                            <div className="flex gap-2 text-xs text-slate-300">
-                              <Chip label={`Impact ${opp.impact}`} />
-                              <Chip label={`Confidence ${opp.confidence}`} />
-                              <Chip label={opp.effort} />
+                        <button
+                          key={opp.id}
+                          onClick={() => chooseOpportunity(opp.id)}
+                          className={`w-full rounded-3xl border p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg ${
+                            selected
+                              ? 'border-orange-300 bg-gradient-to-r from-orange-50 to-white shadow-orange-100'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-slate-200'
+                          }`}
+                        >
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="flex items-center gap-3">
+                                <span className="rounded-full bg-slate-950 px-2.5 py-1 text-xs font-semibold text-white">0{index + 1}</span>
+                                {selected ? <StatusPill tone="orange">Selected</StatusPill> : null}
+                              </div>
+                              <h3 className="mt-3 text-xl font-semibold text-slate-950">{opp.title}</h3>
+                              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{opp.rationale}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <MetricChip label={`Impact ${opp.impact}`} />
+                              <MetricChip label={`Confidence ${opp.confidence}`} />
+                              <MetricChip label={opp.effort} />
                             </div>
                           </div>
-                          <p className="mt-2 text-sm text-slate-300">{opp.rationale}</p>
                         </button>
                       );
                     })}
@@ -193,16 +282,21 @@ export default function App() {
 
             <div className="space-y-6">
               {selectedOpportunity && business.buildPlan ? (
-                <Card title="Build plan" subtitle={`Generated from ${selectedOpportunity.title}`}>
+                <Card title="Launch plan" subtitle={`Sequenced around ${selectedOpportunity.title}`}>
                   <div className="space-y-3">
-                    {business.buildPlan.map((step) => (
-                      <div key={step.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <h3 className="font-medium text-white">{step.title}</h3>
-                          <Chip label={step.status} />
+                    {business.buildPlan.map((step, index) => (
+                      <div key={step.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/70">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">{index + 1}</div>
+                            <div>
+                              <h3 className="font-semibold text-slate-900">{step.title}</h3>
+                              <p className="mt-1 text-sm text-slate-500">Owner: {step.owner}</p>
+                            </div>
+                          </div>
+                          <StatusPill tone={step.status === 'live' || step.status === 'complete' ? 'green' : 'slate'}>{step.status}</StatusPill>
                         </div>
-                        <p className="mt-2 text-sm text-slate-400">Owner: {step.owner}</p>
-                        <p className="text-sm text-slate-300">{step.outcome}</p>
+                        <p className="mt-3 text-sm leading-6 text-slate-600">{step.outcome}</p>
                       </div>
                     ))}
                   </div>
@@ -211,78 +305,114 @@ export default function App() {
 
               {business.runtime ? (
                 <>
-                  <Card title="Dynamic agent architecture" subtitle="Structured runtime graph, generated from the selected opportunity">
-                    <pre className="overflow-auto rounded-2xl bg-slate-950/80 p-4 text-xs text-emerald-300">{JSON.stringify(business.runtime.agents, null, 2)}</pre>
-                  </Card>
-
-                  <Card title="Generated asset preview" subtitle="One tangible artifact from the runtime">
-                    <div className="rounded-3xl border border-orange-500/20 bg-white p-6 text-slate-900">
-                      <p className="text-xs font-semibold uppercase tracking-[0.25em] text-orange-500">Joe&apos;s Pizza</p>
-                      <h3 className="mt-3 text-3xl font-bold">{business.runtime.assetPreview.headline}</h3>
-                      <p className="mt-3 text-slate-700">{business.runtime.assetPreview.subheadline}</p>
-                      <ul className="mt-4 space-y-2 text-slate-800">
-                        {business.runtime.assetPreview.bullets.map((bullet) => <li key={bullet}>• {bullet}</li>)}
-                      </ul>
-                      <button className="mt-5 rounded-2xl bg-orange-500 px-4 py-3 font-semibold text-white">{business.runtime.assetPreview.cta}</button>
+                  <Card title="Agent workspace" subtitle="Structured by responsibility instead of raw schema">
+                    <div className="space-y-3">
+                      {business.runtime.agents.map((agent) => (
+                        <AgentCard key={agent.id} agent={agent} />
+                      ))}
                     </div>
                   </Card>
 
-                  <Card title="Agent testing" subtitle="Smoke checks over the generated plan">
+                  <Card title="Output preview" subtitle="A customer-facing artifact generated from the plan">
+                    <div className="overflow-hidden rounded-[1.75rem] border border-orange-100 bg-[linear-gradient(180deg,_#fff7ed_0%,_#ffffff_38%,_#fffaf5_100%)] p-6 shadow-inner shadow-orange-50">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-orange-600">Featured asset</p>
+                          <p className="mt-2 text-sm text-slate-500">{business.runtime.assetPreview.type}</p>
+                        </div>
+                        <StatusPill tone="orange">Ready to review</StatusPill>
+                      </div>
+                      <h3 className="mt-6 max-w-xl text-3xl font-semibold tracking-tight text-slate-950">{business.runtime.assetPreview.headline}</h3>
+                      <p className="mt-3 max-w-lg text-base leading-7 text-slate-600">{business.runtime.assetPreview.subheadline}</p>
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                        {business.runtime.assetPreview.bullets.map((bullet) => (
+                          <div key={bullet} className="rounded-2xl border border-white bg-white/80 p-4 text-sm text-slate-700 shadow-sm">
+                            {bullet}
+                          </div>
+                        ))}
+                      </div>
+                      <button className="mt-6 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
+                        {business.runtime.assetPreview.cta}
+                      </button>
+                    </div>
+                  </Card>
+
+                  <Card title="Quality checks" subtitle="Pre-launch validation across the generated workflow">
                     <div className="space-y-3">
                       {business.runtime.tests.map((test) => (
-                        <div key={test.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                        <div key={test.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/70">
                           <div className="flex items-center justify-between gap-3">
-                            <h3 className="font-medium text-white">{test.name}</h3>
-                            <Chip label={test.status} tone={test.status === 'pass' ? 'green' : 'amber'} />
+                            <h3 className="font-semibold text-slate-900">{test.name}</h3>
+                            <StatusPill tone={test.status === 'pass' ? 'green' : 'amber'}>{test.status}</StatusPill>
                           </div>
-                          <p className="mt-2 text-sm text-slate-300">{test.details}</p>
+                          <p className="mt-2 text-sm text-slate-600">{test.details}</p>
                         </div>
                       ))}
                     </div>
                   </Card>
 
-                  <Card title="Deployment state machine" subtitle="Draft → validating → deploying → live">
+                  <Card title="Release lifecycle" subtitle="Visibility from draft to live">
                     <div className="flex flex-wrap gap-2">
-                      {['draft', 'validating', 'deploying', 'live'].map((state) => (
-                        <Chip key={state} label={state} tone={business.deployment?.state === state ? 'orange' : 'slate'} />
+                      {lifecycleStates.map((state) => (
+                        <StatusPill key={state} tone={business.deployment?.state === state ? 'orange' : 'slate'}>
+                          {state}
+                        </StatusPill>
                       ))}
                     </div>
                     <div className="mt-4 space-y-3">
                       {business.deployment?.history.map((item) => (
-                        <div key={`${item.at}-${item.state}`} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm">
-                          <p className="text-white">{item.state}</p>
-                          <p className="text-slate-400">{new Date(item.at).toLocaleTimeString()} • {item.note}</p>
+                        <div key={`${item.at}-${item.state}`} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-medium text-slate-900 capitalize">{item.state}</p>
+                            <p className="text-xs uppercase tracking-[0.16em] text-slate-400">{new Date(item.at).toLocaleTimeString()}</p>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">{item.note}</p>
                         </div>
                       ))}
                     </div>
                   </Card>
 
-                  <Card title="Live agent dashboard" subtitle={`Runtime status: ${business.runtime.status}`}>
+                  <Card title="Operations board" subtitle={`Runtime status: ${business.runtime.status}`}>
                     <div className="space-y-3">
                       {business.runtime.tasks.map((task) => (
-                        <div key={task.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div key={task.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/70">
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
-                              <h3 className="font-medium text-white">{task.title}</h3>
-                              <p className="mt-1 text-sm text-slate-400">Agent: {task.agentId}</p>
-                              <p className="mt-2 text-sm text-slate-300">{task.notes}</p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="font-semibold text-slate-900">{task.title}</h3>
+                                <StatusPill tone="slate">{task.status}</StatusPill>
+                              </div>
+                              <p className="mt-2 text-sm text-slate-500">Owner agent: {task.agentId}</p>
+                              <p className="mt-2 text-sm leading-6 text-slate-600">{task.notes}</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                              <Chip label={task.status} />
-                              <button onClick={() => updateTask(task.id, 'advance')} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20">Advance</button>
-                              <button onClick={() => updateTask(task.id, 'block')} className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20">Block</button>
+                              <button
+                                onClick={() => updateTask(task.id, 'advance')}
+                                className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                              >
+                                Advance
+                              </button>
+                              <button
+                                onClick={() => updateTask(task.id, 'block')}
+                                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                              >
+                                Block
+                              </button>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                      <h3 className="font-medium text-white">Recent runtime events</h3>
-                      <div className="mt-3 space-y-2 text-sm text-slate-300">
+                    <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="font-semibold text-slate-900">Recent activity</h3>
+                        <StatusPill tone="slate">Live feed</StatusPill>
+                      </div>
+                      <div className="mt-4 space-y-3">
                         {business.runtime.eventLog.map((event) => (
-                          <div key={`${event.at}-${event.text}`} className="flex justify-between gap-3 border-b border-slate-800/70 pb-2 last:border-b-0">
-                            <span>{event.text}</span>
-                            <span className="text-slate-500">{new Date(event.at).toLocaleTimeString()}</span>
+                          <div key={`${event.at}-${event.text}`} className="flex items-start justify-between gap-4 border-b border-slate-200 pb-3 text-sm last:border-b-0 last:pb-0">
+                            <p className="text-slate-600">{event.text}</p>
+                            <p className="whitespace-nowrap text-slate-400">{new Date(event.at).toLocaleTimeString()}</p>
                           </div>
                         ))}
                       </div>
@@ -293,33 +423,106 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <Card title="No business loaded" subtitle="Use the demo search target to unlock the full flow.">
-            <p className="text-slate-400">Try searching for Joe&apos;s Pizza.</p>
-          </Card>
+          <div className="mt-6">
+            <Card title="No business selected" subtitle="Start with a local brand to open the workspace">
+              <p className="text-sm text-slate-600">Try searching for Joe&apos;s Pizza to see the full planning flow.</p>
+            </Card>
+          </div>
         )}
       </div>
     </main>
   );
 }
 
-function Chip({ label, tone = 'slate' }: { label: string; tone?: 'slate' | 'green' | 'amber' | 'orange' }) {
-  const toneClass = {
-    slate: 'border-slate-700 bg-slate-800 text-slate-200',
-    green: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
-    amber: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
-    orange: 'border-orange-500/30 bg-orange-500/10 text-orange-300'
-  }[tone];
-
-  return <span className={`rounded-full border px-2.5 py-1 text-xs capitalize ${toneClass}`}>{label}</span>;
+function AgentCard({ agent }: { agent: AgentDefinition }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{agent.id}</p>
+          <h3 className="mt-2 text-lg font-semibold text-slate-900">{agent.name}</h3>
+          <p className="mt-1 text-sm text-slate-500">{agent.role}</p>
+        </div>
+        <StatusPill tone="slate">{agent.tools.length} tools</StatusPill>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-slate-600">{agent.goal}</p>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <KeyValueList title="Inputs" items={agent.inputs} />
+        <KeyValueList title="Outputs" items={agent.outputs} />
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {agent.dependsOn.length ? agent.dependsOn.map((dependency) => <MetricChip key={dependency} label={`Depends on ${dependency}`} />) : <MetricChip label="No upstream dependency" />}
+      </div>
+    </div>
+  );
 }
 
-function List({ title, items }: { title: string; items: string[] }) {
+function KeyValueList({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-      <h3 className="font-medium text-white">{title}</h3>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-        {items.map((item) => <li key={item}>{item}</li>)}
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span key={item} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm shadow-slate-200/70">
+            {item}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StageCard({ title, copy, active, completed = false }: { title: string; copy: string; active?: boolean; completed?: boolean }) {
+  return (
+    <div className={`rounded-2xl border p-4 transition ${active ? 'border-orange-200 bg-orange-50/80' : completed ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-white'}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-slate-900">{title}</p>
+        <span className={`h-2.5 w-2.5 rounded-full ${active ? 'bg-orange-500' : completed ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="mt-2 text-xl font-semibold text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function InsightList({ title, items, tone }: { title: string; items: string[]; tone: 'green' | 'amber' | 'sky' }) {
+  const tones = {
+    green: 'border-emerald-200 bg-emerald-50/70 marker:text-emerald-500',
+    amber: 'border-amber-200 bg-amber-50/70 marker:text-amber-500',
+    sky: 'border-sky-200 bg-sky-50/70 marker:text-sky-500'
+  } as const;
+
+  return (
+    <div className={`rounded-3xl border p-5 ${tones[tone]}`}>
+      <h3 className="font-semibold text-slate-900">{title}</h3>
+      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
       </ul>
     </div>
   );
+}
+
+function MetricChip({ label }: { label: string }) {
+  return <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600">{label}</span>;
+}
+
+function StatusPill({ children, tone }: { children: ReactNode; tone: 'slate' | 'green' | 'amber' | 'orange' }) {
+  const tones = {
+    slate: 'border-slate-200 bg-slate-100 text-slate-700',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    orange: 'border-orange-200 bg-orange-50 text-orange-700'
+  } as const;
+
+  return <span className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${tones[tone]}`}>{children}</span>;
 }
